@@ -1,0 +1,30 @@
+@import "tailwindcss";
+
+/* Custom markdown styling */
+.markdown-content ol {
+  counter-reset: list-counter;
+}
+
+.markdown-content ol > li {
+  counter-increment: list-counter;
+  display: flex;
+  position: relative;
+  padding-left: 0;
+}
+
+.markdown-content ol > li::before {
+  content: counter(list-counter) ". ";
+  font-weight: 600;
+  color: #60a5fa; /* blue-400 */
+  margin-right: 0.5rem;
+  flex-shrink: 0;
+}
+
+.markdown-content ol > li > p {
+  margin-bottom: 0;
+  display: inline;
+}
+
+.markdown-content ul > li::marker {
+  color: #60a5fa; /* blue-400 */
+}

@@ -1,0 +1,39 @@
+[project]
+name = "backend"
+version = "0.1.0"
+description = "RAG system for ISO 27001/27002 documents"
+requires-python = ">=3.10"
+
+dependencies = [
+    # FastAPI
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "pydantic>=2.0.0",
+    # LangChain
+    "langchain>=0.1.0",
+    "langchain-community>=0.0.10",
+    "langchain-openai>=0.0.5",
+    "langgraph>=0.0.40",
+    "langchain-core>=0.1.0",
+    # Vector Store
+    "qdrant-client>=1.7.0",
+    "langchain-qdrant>=0.1.0",
+    # Document Processing
+    "pymupdf>=1.23.0",
+    # Utilities
+    "python-dotenv>=1.0.0",
+    "python-multipart>=0.0.20",
+    # Search
+    "tavily-python>=0.3.0",
+]
+
+# [project.optional-dependencies]
+# dev = [
+#     "pytest>=7.4.0",
+#     "black>=23.0.0",
+#     "ruff>=0.1.0",
+# ]
+
+# [build-system]
+# requires = ["setuptools>=68.0"]
+# build-backend = "setuptools.build_meta"
