@@ -16,6 +16,7 @@ load_dotenv()
 # ============================================================================
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
+COHERE_API_KEY = os.getenv("COHERE_API_KEY")
 
 # Validate required API keys
 if not OPENAI_API_KEY:
@@ -35,14 +36,14 @@ LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
 QDRANT_MODE = os.getenv("QDRANT_MODE", "docker")  # "memory" or "docker"
 QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
 QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
-QDRANT_COLLECTION = os.getenv("QDRANT_COLLECTION", "iso_collections")
+QDRANT_COLLECTION = os.getenv("QDRANT_COLLECTION", "security_knowledge")
 
 
 # ============================================================================
 # Document Processing
 # ============================================================================
-CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "1000"))
-CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "200"))
+CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "1500"))  # Increased for better context
+CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "300"))  # 20% overlap
 
 
 # ============================================================================
@@ -58,11 +59,15 @@ DATA_PATH = BASE_DIR / os.getenv("DATA_PATH", "data/")
 # ============================================================================
 TOP_K = int(os.getenv("TOP_K", "3"))
 
+# Advanced Retrieval (Task 6)
+USE_RERANKING = os.getenv("USE_RERANKING", "True").lower() == "true"  # Enable by default
+RERANKER_MODEL = os.getenv("RERANKER_MODEL", "cohere")  # Cohere reranker
+
 
 # ============================================================================
 # Logging
 # ============================================================================
-LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")  # Options: DEBUG, INFO, WARNING, ERROR
 
 
 # ============================================================================
@@ -81,6 +86,8 @@ def print_settings():
     print(f"Chunk Size:         {CHUNK_SIZE}")
     print(f"Chunk Overlap:      {CHUNK_OVERLAP}")
     print(f"Top K Results:      {TOP_K}")
+    print(f"Use Reranking:      {USE_RERANKING}")
+    print(f"Reranker Model:     {RERANKER_MODEL}")
     print(f"Data Path:          {DATA_PATH}")
     print(f"Log Level:          {LOG_LEVEL}")
     print("=" * 60)

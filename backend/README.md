@@ -1,79 +1,109 @@
-# ISO RAG System
+# Security Maturity Assistant - RAG System
 
-A Retrieval-Augmented Generation (RAG) system for ISO 27001/27002 documents, built with FastAPI, LangChain, and Qdrant.
+A production-grade Retrieval-Augmented Generation (RAG) system for security frameworks (CIS, NIST, OWASP, CSA), featuring multi-agent workflow and advanced retrieval techniques.
 
 ## 📋 Table of Contents
 
-- [Features](#features)
-- [Prerequisites](#prerequisites)
-- [Installation](#installation)
-- [Configuration](#configuration)
-- [Running the Application](#running-the-application)
-- [API Documentation](#api-documentation)
-- [Project Structure](#project-structure)
-- [Development](#development)
-- [Troubleshooting](#troubleshooting)
+- [Features](#-features)
+- [Prerequisites](#-prerequisites)
+- [Installation](#-installation)
+- [Configuration](#️-configuration)
+- [Running the Application](#-running-the-application)
+- [API Documentation](#-api-documentation)
+- [Evaluation Workflow](#-evaluation-workflow-tasks-5-6-7)
+- [Advanced Retrieval](#-advanced-retrieval-task-6)
+- [Project Structure](#-project-structure)
+- [Development](#️-development)
+- [Troubleshooting](#-troubleshooting)
 
 ---
 
 ## ✨ Features
 
-- **PDF Document Processing**: Automatically load and chunk ISO standard PDFs
-- **Vector Search**: Semantic search using OpenAI embeddings and Qdrant
-- **RESTful API**: FastAPI endpoints for document ingestion and querying
-- **Flexible Storage**: Support for both in-memory and Docker-based Qdrant
-- **Interactive Docs**: Auto-generated Swagger UI and ReDoc
+### Core Features
+- **PDF Document Processing**: Automatic loading and intelligent chunking of security framework PDFs
+- **Vector Search**: Semantic search using OpenAI embeddings (`text-embedding-3-small`) and Qdrant
+- **Agentic RAG**: Multi-agent workflow with LangGraph
+  - Analysis Agent: Retrieves relevant security documentation
+  - Research Agent: Conditional web search (Tavily) for implementation examples
+  - Planning Agent: Synthesizes actionable implementation plans
+- **RESTful API**: FastAPI endpoints with auto-generated documentation
+- **Flexible Storage**: In-memory or Docker-based Qdrant
+
+### Advanced Retrieval (Task 6)
+- **Ensemble Retrieval**: Combines multiple retrieval strategies with reciprocal rank fusion
+  - **Vector Search**: Semantic understanding via embeddings
+  - **BM25 Retriever**: Keyword matching for exact terms (e.g., "CIS Control 5.2")
+  - **Cohere Reranking**: Cross-encoder precision filtering using `rerank-v3.5`
+  - Three-way ensemble with weighted fusion (Vector 40%, BM25 30%, Cohere 30%)
+  - Improves retrieval quality and response generation
+
+### Evaluation Framework (Tasks 5 & 7)
+- **RAGAS Integration**: Comprehensive evaluation with 5 metrics
+  - Faithfulness, Response Relevancy, Factual Correctness
+  - Context Precision, Context Recall
+- **Synthetic Data Generation**: 60-question golden test dataset
+- **Comparison Tools**: Side-by-side baseline vs advanced analysis
 
 ---
 
 ## 🔧 Prerequisites
 
 - **Python**: 3.10 or higher
-- **OpenAI API Key**: For embeddings and LLM
-- **Docker** (optional): For persistent Qdrant vector store
-- **PDFs**: ISO 27001/27002 documents (or any PDFs you want to query)
+- **OpenAI API Key**: For embeddings (`text-embedding-3-small`) and LLM (`gpt-4o-mini`)
+- **Cohere API Key**: For ensemble reranking (optional, for advanced retrieval)
+- **Tavily API Key**: For web search (optional, for research agent)
+- **Docker** (recommended): For persistent Qdrant vector store
+- **Security PDFs**: Place in `data/` folder (CIS, NIST, OWASP, CSA benchmarks)
 
 ---
 
 ## 📦 Installation
 
-### 1. Clone/Navigate to the Backend Directory
+### 1. Navigate to Backend Directory
 
 ```bash
 cd backend
 ```
 
-### 2. Install Python Dependencies
+### 2. Install Dependencies
 
+**Using uv (recommended):**
+```bash
+uv sync
+```
+
+**Using pip:**
 ```bash
 pip install -e .
 ```
 
-This will install:
-- FastAPI & Uvicorn
-- LangChain & LangChain OpenAI
-- Qdrant Client
-- PyMuPDF (for PDF processing)
-- Python-dotenv
+This installs:
+- FastAPI & Uvicorn (API server)
+- LangChain & LangGraph (agentic workflow)
+- Qdrant Client (vector database)
+- OpenAI & Cohere (LLM & reranking)
+- PyMuPDF (PDF processing)
+- RAGAS (evaluation framework)
 
-### 3. Set Up Qdrant (Choose One Option)
+### 3. Set Up Qdrant
 
-#### Option A: In-Memory (Quick Start - No Persistence)
-
-No setup needed! Data will be stored in memory and lost on restart.
-
-#### Option B: Docker (Recommended - Persistent Storage)
+**Option A: Docker (Recommended - Persistent Storage)**
 
 ```bash
-# Start Qdrant container
+cd docker
 docker-compose up -d
 
 # Verify it's running
 docker ps
 
-# Access Qdrant dashboard
+# Access dashboard
 open http://localhost:6333/dashboard
 ```
+
+**Option B: In-Memory (Quick Start - No Persistence)**
+
+No setup needed! Set `QDRANT_MODE=memory` in `.env`
 
 ---
 
@@ -81,258 +111,372 @@ open http://localhost:6333/dashboard
 
 ### 1. Create Environment File
 
-Copy the example environment file:
-
 ```bash
 cp .env.example .env
 ```
 
-### 2. Edit `.env` File
+### 2. Add API Keys to `.env`
 
-**Minimum Required Configuration:**
-
-```env
-# Required: Your OpenAI API Key
-OPENAI_API_KEY=sk-proj-your-actual-key-here
-
-# Choose storage mode: "memory" or "docker"
-QDRANT_MODE=docker
-```
-
-**Full Configuration Options:**
+**Minimum Required:**
 
 ```env
-# =============================================================================
-# API Keys
-# =============================================================================
+# Required
 OPENAI_API_KEY=sk-proj-your-key-here
-TAVILY_API_KEY=tvly-dev-your-key-here  # Optional
 
-# =============================================================================
-# Model Configuration
-# =============================================================================
-EMBEDDING_MODEL=text-embedding-3-small  # OpenAI embedding model
-LLM_MODEL=gpt-4o-mini                   # OpenAI chat model
-
-# =============================================================================
-# Qdrant Configuration
-# =============================================================================
-QDRANT_MODE=docker                      # Options: "memory" or "docker"
-QDRANT_HOST=localhost                   # Qdrant host (for docker mode)
-QDRANT_PORT=6333                        # Qdrant port
-QDRANT_COLLECTION=iso_documents         # Collection name
-
-# =============================================================================
-# Document Processing
-# =============================================================================
-CHUNK_SIZE=1500                         # Characters per chunk (recommended for ISO docs)
-CHUNK_OVERLAP=300                       # Overlap between chunks
-
-# =============================================================================
-# Paths
-# =============================================================================
-DATA_PATH=data/                         # Directory containing PDF files
-
-# =============================================================================
-# Retrieval Settings
-# =============================================================================
-TOP_K=3                                 # Default number of results to retrieve
-
-# =============================================================================
-# Logging
-# =============================================================================
-LOG_LEVEL=INFO                          # Options: DEBUG, INFO, WARNING, ERROR
+# Optional (but recommended for full features)
+COHERE_API_KEY=your-cohere-key-here
+TAVILY_API_KEY=tvly-your-key-here
 ```
 
-### 3. Add Your PDF Documents
+### 3. Configuration Settings
 
-Place your PDF files in the `data/` directory:
+All other configuration is in `utils/settings.py` with sensible defaults:
+
+```python
+# Model Configuration
+EMBEDDING_MODEL = "text-embedding-3-small"
+LLM_MODEL = "gpt-4o-mini"
+
+# Qdrant Configuration
+QDRANT_MODE = "docker"  # or "memory"
+QDRANT_HOST = "localhost"
+QDRANT_PORT = 6333
+QDRANT_COLLECTION = "security_knowledge"
+
+# Document Processing
+CHUNK_SIZE = 1500      # Optimized for security benchmarks
+CHUNK_OVERLAP = 300    # 20% overlap for context
+
+# Retrieval Settings
+TOP_K = 3              # Number of documents to retrieve
+
+# Advanced Retrieval (Task 6)
+USE_ENSEMBLE = False   # Enable ensemble retrieval (Vector + BM25 + Cohere)
+
+# Logging
+LOG_LEVEL = "INFO"
+```
+
+**To override defaults**, add to `.env`:
+
+```env
+# Override any setting
+TOP_K=5
+USE_RERANKING=False
+CHUNK_SIZE=2000
+```
+
+### 4. Add PDF Documents
+
+Place security framework PDFs in `data/`:
 
 ```bash
 backend/
 └── data/
-    ├── isoiec_27001_2022.pdf
-    └── isoiec_27002_2022.pdf
+    ├── CIS_Amazon_Web_Services_Foundations_Benchmark_v6.0.0.pdf
+    ├── CIS_Controls_Guide_v8.1.2_0325_v2.pdf
+    ├── NIST.CSWP.29.pdf
+    ├── OWASP_Application_Security_Verification_Standard_5.0.0_en.pdf
+    └── ... (more security PDFs)
 ```
 
 ---
 
 ## 🚀 Running the Application
 
-### Start the API Server
+### 1. Start Qdrant (if using Docker)
 
-**Development Mode (with auto-reload):**
+```bash
+cd docker
+docker-compose up -d
+```
 
+### 2. Ingest Documents
+
+**Option A: Via API**
+```bash
+# Start the API first
+uvicorn main:app --reload
+
+# Then ingest (in another terminal)
+curl -X POST http://localhost:8000/ingest
+```
+
+**Option B: Via Script**
+```bash
+python utils/vector_store.py
+```
+
+### 3. Start the API Server
+
+**Development (with auto-reload):**
 ```bash
 uvicorn main:app --reload
 ```
 
-**Production Mode:**
-
+**Production:**
 ```bash
 uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
-**Custom Port:**
-
-```bash
-uvicorn main:app --port 8080
-```
-
-The API will be available at: **http://localhost:8000**
+The API will be available at **http://localhost:8000**
 
 ---
 
 ## 📖 API Documentation
 
-### Interactive Documentation
-
-Once the server is running, visit:
+### Interactive Docs
 
 - **Swagger UI**: http://localhost:8000/docs
 - **ReDoc**: http://localhost:8000/redoc
 
-### Available Endpoints
+### Key Endpoints
 
-#### 1. Health Check
-
+#### Health Check
 ```bash
-GET /
 GET /health
 ```
 
-**Example:**
 ```bash
 curl http://localhost:8000/health
 ```
 
-**Response:**
-```json
-{
-  "status": "healthy",
-  "settings": {
-    "data_path": "data/",
-    "chunk_size": 1500,
-    "qdrant_mode": "docker"
-  },
-  "vector_store": {
-    "name": "iso_documents",
-    "vectors_count": 150,
-    "points_count": 150
-  }
-}
-```
-
----
-
-#### 2. Ingest Documents
-
-Loads PDFs from `data/` folder and stores them in the vector database.
-
+#### Ingest Documents
 ```bash
 POST /ingest
 ```
 
-**Example:**
 ```bash
 curl -X POST http://localhost:8000/ingest
 ```
 
-**Response:**
-```json
-{
-  "message": "Documents ingested successfully",
-  "total_chunks": 150
-}
-```
-
----
-
-#### 3. Query RAG System
-
-Search for relevant information and get AI-generated answers.
-
+#### Query RAG System
 ```bash
 POST /query
 ```
 
-**Request Body:**
-```json
-{
-  "query": "What is ISO 27001?",
-  "top_k": 3
-}
-```
-
-**Example:**
 ```bash
 curl -X POST http://localhost:8000/query \
   -H "Content-Type: application/json" \
-  -d '{"query": "What is ISO 27001?", "top_k": 3}'
+  -d '{"query": "What are the CIS Controls?", "top_k": 3}'
 ```
 
 **Response:**
 ```json
 {
-  "answer": "Based on the documents...",
+  "answer": "The CIS Controls are...",
   "sources": [
     {
-      "content": "ISO/IEC 27001:2022 specifies...",
+      "content": "CIS Control 1: Inventory...",
       "metadata": {
-        "source": "data/isoiec_27001_2022.pdf",
-        "page": 1
-      },
-      "score": 0.89
+        "source": "data/CIS_Controls_Guide_v8.1.2.pdf",
+        "page": 5
+      }
     }
   ]
 }
 ```
 
----
-
-#### 4. Get Collection Info
-
-Get statistics about the vector store.
-
+#### Collection Info
 ```bash
 GET /collection/info
 ```
 
-**Example:**
 ```bash
 curl http://localhost:8000/collection/info
 ```
 
-**Response:**
-```json
-{
-  "name": "iso_documents",
-  "vectors_count": 150,
-  "points_count": 150,
-  "status": "green"
-}
-```
-
----
-
-#### 5. Clear Vector Store
-
-Delete all documents from the vector database.
-
+#### Clear Vector Store
 ```bash
 DELETE /clear
 ```
 
-**Example:**
 ```bash
 curl -X DELETE http://localhost:8000/clear
 ```
 
-**Response:**
-```json
-{
-  "message": "Vector store cleared successfully"
-}
+---
+
+## 📊 Evaluation Workflow (Tasks 5, 6, 7)
+
+Complete evaluation workflow for measuring RAG performance using RAGAS framework.
+
+### Task 5: Golden Test Dataset & Baseline Evaluation
+
+#### Step 1: Generate Synthetic Test Data (Already Done)
+
+```bash
+cd ragas
+jupyter notebook 01_generate_synthetic_data.ipynb
+```
+
+Generates `golden_test_data.csv` with 60 questions.
+
+#### Step 2: Run Baseline Evaluation
+
+```bash
+jupyter notebook 02_evaluations.ipynb
+```
+
+The notebook runs:
+1. **Baseline RAG**: Naive agentic RAG (top_k=3, no reranking)
+2. **RAGAS Evaluation**: 5 metrics (Faithfulness, Response Relevancy, etc.)
+3. **Results Table**: Performance summary
+
+**Expected Time**: 15-30 minutes for 60 questions  
+**Expected Cost**: ~$2-3 (OpenAI + Tavily)
+
+### Task 6: Advanced Retrieval Implementation
+
+**Implemented Technique: Ensemble Retrieval**
+
+```python
+# Baseline (Naive Agentic RAG)
+rag_baseline = RAGPipeline(
+    top_k=3,          # Retrieve 3 documents
+    use_tavily=True,  # Web search enabled
+    use_agents=True,  # Multi-agent workflow
+    use_ensemble=False
+)
+
+# Advanced (Ensemble Retrieval)
+rag_advanced = RAGPipeline(
+    top_k=3,           # Final output: 3 documents
+    use_tavily=True,
+    use_agents=True,
+    use_ensemble=True  # ✨ Vector + BM25 + Cohere ensemble
+)
+```
+
+**Why Ensemble Retrieval?**
+
+- **Multiple Perspectives**: Combines semantic (vector), lexical (BM25), and precision (Cohere) strategies
+- **Better Coverage**: BM25 catches exact keywords that embeddings might miss
+- **Improved Precision**: Cohere reranking filters best candidates from larger pool
+- **Reciprocal Rank Fusion**: Intelligently merges results from all three sources
+- **Critical for Security**: Ensures both exact terms (e.g., "CIS Control 5.2") and conceptual matches are found
+
+### Task 7: Performance Assessment
+
+Run advanced evaluation in same notebook (`02_evaluations.ipynb`):
+
+```python
+# 1. Run advanced RAG on dataset
+df_advanced = run_rag_on_dataset(df, rag_advanced)
+
+# 2. Evaluate with RAGAS
+advanced_results = evaluate_rag_dataset(df_advanced, evaluator_llm)
+
+# 3. Compare with baseline
+comparison = compare_evaluations(
+    baseline_results,
+    advanced_results,
+    baseline_name="Baseline (Naive)",
+    advanced_name="Advanced (Ensemble)"
+)
+```
+
+**Expected Improvements:**
+- Context Precision: Improved (better document selection)
+- Context Recall: Improved (BM25 catches missed keywords)
+- Faithfulness: Improved (higher quality context)
+- Response Relevancy: Improved (better grounding)
+
+**Note**: The baseline is already sophisticated (multi-agent + web search), so improvements are incremental but consistent across multiple metrics.
+
+### RAGAS Metrics Explained
+
+| Metric | What it Measures | Good Score |
+|--------|-----------------|------------|
+| **Faithfulness** | Response grounded in retrieved context (no hallucinations) | > 0.7 |
+| **Response Relevancy** | Response relevance to the question | > 0.7 |
+| **Factual Correctness** | Response matches reference answer | > 0.6 |
+| **Context Precision** | Retrieved contexts are relevant | > 0.6 |
+| **Context Recall** | All necessary contexts retrieved | > 0.6 |
+
+### Reusing Saved Results
+
+Load and compare without re-running evaluation:
+
+```python
+from evaluation_utils import ResultsWrapper
+import pandas as pd
+
+# Load saved CSVs (stored in ragas/results/ folder)
+baseline_df = pd.read_csv("results/baseline_results_TIMESTAMP.csv")
+baseline_results = ResultsWrapper(baseline_df)
+
+advanced_df = pd.read_csv("results/advanced_results_TIMESTAMP.csv")
+advanced_results = ResultsWrapper(advanced_df)
+
+# Compare
+from evaluation_utils import compare_evaluations
+comparison = compare_evaluations(baseline_results, advanced_results)
+```
+
+### Evaluation Documentation
+
+See `ragas/README.md` for detailed evaluation guide.
+
+---
+
+## 🚀 Advanced Retrieval (Task 6)
+
+### Ensemble Retrieval
+
+**Implementation**: `utils/advanced_retrieval.py`
+
+**How it Works:**
+1. **Vector Retriever**: Retrieves 15 candidates using semantic embeddings
+2. **BM25 Retriever**: Retrieves 15 candidates using keyword matching (exact term scores)
+3. **Cohere Reranker**: Reranks vector results from 15 → 7 using cross-encoder
+4. **Reciprocal Rank Fusion**: Merges all three streams with weights (Vector 40%, BM25 30%, Cohere 30%)
+5. **Final Selection**: Returns top 3 documents after fusion
+
+**Configuration:**
+
+```python
+# In code
+rag = RAGPipeline(
+    top_k=3,
+    use_ensemble=True
+)
+
+# Or via settings.py
+USE_ENSEMBLE = True
+```
+
+**Cost**: ~$0.10-0.15 for 60 queries (very affordable)
+
+**Latency**: +200-300ms per query (BM25 indexing + Cohere reranking)
+
+### API Setup
+
+1. Sign up at https://cohere.com
+2. Get API key from dashboard
+3. Add to `.env`:
+   ```env
+   COHERE_API_KEY=your-cohere-key-here
+   ```
+
+### Testing Ensemble Retrieval
+
+```python
+from utils.rag import RAGPipeline
+
+# Test without ensemble
+rag_baseline = RAGPipeline(use_ensemble=False)
+result1 = rag_baseline.query("What are the CIS Controls?")
+
+# Test with ensemble
+rag_advanced = RAGPipeline(use_ensemble=True)
+result2 = rag_advanced.query("What are the CIS Controls?")
+
+# Compare sources
+print("Baseline sources:", len(result1['sources']))
+print("Advanced sources:", len(result2['sources']))
+print("\nBaseline retrieval: Vector only")
+print("Advanced retrieval: Vector + BM25 + Cohere ensemble")
 ```
 
 ---
@@ -341,25 +485,40 @@ curl -X DELETE http://localhost:8000/clear
 
 ```
 backend/
-├── data/                           # PDF documents
-│   ├── isoiec_27001_2022.pdf
-│   └── isoiec_27002_2022.pdf
+├── data/                          # PDF documents
+│   ├── CIS_*.pdf
+│   ├── NIST_*.pdf
+│   ├── OWASP_*.pdf
+│   └── CSA_*.pdf
 │
-├── docker/                         # Docker configuration (optional)
-│   └── qdrant_storage/            # Persistent Qdrant data
+├── docker/                        # Docker configuration
+│   ├── docker-compose.yml
+│   └── qdrant_storage/           # Persistent Qdrant data
 │
-├── utils/                          # Core utilities
+├── ragas/                         # Evaluation framework
+│   ├── 01_generate_synthetic_data.ipynb  # Generate test dataset
+│   ├── 02_evaluations.ipynb      # Run evaluations (Tasks 5, 6, 7)
+│   ├── evaluation_utils.py       # Reusable evaluation functions
+│   ├── golden_test_data.csv      # 60-question test dataset
+│   ├── results/                   # Evaluation results (CSV files)
+│   └── README.md                  # Evaluation guide
+│
+├── utils/                         # Core utilities
 │   ├── __init__.py
-│   ├── settings.py                # Configuration management
-│   ├── document_processor.py      # PDF loading and chunking
-│   └── vector_store.py            # Qdrant vector store operations
+│   ├── settings.py                # Configuration (most settings here!)
+│   ├── document_processor.py     # PDF loading and chunking
+│   ├── vector_store.py            # Qdrant operations
+│   ├── rag.py                     # RAG pipeline
+│   ├── agents.py                  # LangGraph multi-agent workflow
+│   ├── advanced_retrieval.py     # Ensemble retrieval (Vector + BM25 + Cohere)
+│   ├── tools.py                   # Tavily web search
+│   └── prompts.py                 # LLM prompts
 │
-├── main.py                         # FastAPI application
-├── docker-compose.yml              # Qdrant Docker setup
-├── pyproject.toml                  # Python dependencies
-├── .env                            # Environment variables (create from .env.example)
-├── .env.example                    # Environment template
-└── README.md                       # This file
+├── main.py                        # FastAPI application
+├── pyproject.toml                 # Dependencies
+├── .env.example                   # Environment template
+├── .env                           # Your API keys (create from .env.example)
+└── README.md                      # This file
 ```
 
 ---
@@ -368,42 +527,33 @@ backend/
 
 ### Test Document Processing
 
-Test PDF loading and chunking without starting the API:
-
 ```bash
-python -m utils.document_processor
+python utils/document_processor.py
 ```
-
-This will:
-- Load all PDFs from `data/`
-- Chunk them according to your settings
-- Display statistics
-
----
 
 ### Test Vector Store
 
-Test Qdrant operations:
-
 ```bash
-python -m utils.vector_store
+python utils/vector_store.py
 ```
 
-This will:
-- Connect to Qdrant
-- Process and ingest documents
-- Run a test search query
-
----
-
-### Code Quality
+### Test RAG Pipeline
 
 ```bash
-# Format code
-black .
+python utils/rag.py
+```
 
-# Lint code
-ruff check .
+### Test Agentic Workflow
+
+```bash
+python utils/agents.py
+```
+
+### View Configuration
+
+```python
+from utils.settings import print_settings
+print_settings()
 ```
 
 ---
@@ -412,148 +562,155 @@ ruff check .
 
 ### Qdrant Connection Issues
 
-**Problem**: Can't connect to Qdrant
-
-**Solution**:
 ```bash
-# Check if Qdrant is running
+# Check if running
 docker ps
 
-# View Qdrant logs
+# View logs
 docker logs qdrant
 
-# Restart Qdrant
+# Restart
+cd docker
 docker-compose restart
 
-# Or rebuild
+# Clean restart
 docker-compose down
 docker-compose up -d
 ```
 
----
+### OpenAI Rate Limits
 
-### OpenAI API Errors
+- Check API key in `.env`
+- Verify account has credits
+- Add delays between requests in evaluation
 
-**Problem**: Authentication errors or rate limits
+### Cohere API Errors
 
-**Solution**:
-1. Verify your API key in `.env` is correct
-2. Check your OpenAI account has credits
-3. Reduce request frequency if hitting rate limits
-
----
-
-### PDF Loading Issues
-
-**Problem**: PDFs not found or can't be loaded
-
-**Solution**:
 ```bash
-# Verify PDFs exist
-ls data/
+# Install Cohere
+pip install cohere
 
-# Check file permissions
-chmod 644 data/*.pdf
-
-# Verify path in .env
-cat .env | grep DATA_PATH
+# Add API key to .env
+echo "COHERE_API_KEY=your-key" >> .env
 ```
 
----
+### Evaluation Hangs
+
+- Reduce `max_workers` in `RunConfig` (from 4 to 2)
+- Increase `delay_seconds` in `run_rag_on_dataset()`
+- Check API rate limits
+
+### Documents Not Ingested
+
+```bash
+# Verify PDFs exist
+ls -lh data/
+
+# Check collection
+curl http://localhost:6333/collections/security_knowledge
+
+# Re-ingest
+curl -X POST http://localhost:8000/ingest
+```
 
 ### Import Errors
 
-**Problem**: Module not found errors
-
-**Solution**:
 ```bash
-# Reinstall dependencies
+# Reinstall
 pip install -e . --force-reinstall
 
-# Or create fresh virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -e .
+# Or with uv
+uv sync --reinstall
 ```
+
+### Module Not Found (Jupyter)
+
+```python
+# Add parent directory to path (in notebook)
+import sys
+from pathlib import Path
+sys.path.append(str(Path.cwd().parent))
+```
+
+### Kernel Restart Required (Jupyter)
+
+After modifying Python files:
+1. Restart kernel: Kernel → Restart
+2. Re-run setup cells
+3. Or reload module: `importlib.reload(module)`
 
 ---
 
-### Memory Issues
+## 📊 Performance Characteristics
 
-**Problem**: Out of memory when processing large PDFs
+### Baseline (Naive Agentic RAG)
 
-**Solution**:
-1. Reduce `CHUNK_SIZE` in `.env` (e.g., from 1500 to 1000)
-2. Process PDFs in smaller batches
-3. Use Docker mode for better memory management
+- **Latency**: 2-5 seconds
+- **Cost**: ~$0.04-0.06 per query
+- **Accuracy**: Good (multi-agent + web search)
 
----
+### Advanced (With Ensemble Retrieval)
 
-### Port Already in Use
+- **Latency**: 2.3-5.5 seconds (+300ms for BM25 + Cohere)
+- **Cost**: ~$0.05-0.08 per query (+~$0.01-0.02)
+- **Accuracy**: Better (improvements across multiple metrics)
 
-**Problem**: Port 8000 or 6333 already in use
+### Storage
 
-**Solution**:
-```bash
-# For API (port 8000)
-uvicorn main:app --port 8080
-
-# For Qdrant (port 6333)
-# Edit docker-compose.yml and change port mapping:
-# ports:
-#   - "6334:6333"  # Use port 6334 on host
-```
+- **16 PDFs**: ~90,000 chunks
+- **Disk Space**: ~500MB (Qdrant storage)
+- **Memory**: ~2GB RAM (during operation)
 
 ---
 
-## 🛑 Stopping the Application
+## 🎯 Key Configuration Decisions
 
-### Stop API Server
+### Why top_k=3?
 
-Press `Ctrl+C` in the terminal where uvicorn is running.
+- Balances context quality vs quantity
+- Prevents information overload to LLM
+- Fast retrieval and reranking
+- Works well with reranking (9 candidates → 3 best)
 
-### Stop Qdrant (Docker Mode)
+### Why chunk_size=1500?
 
-```bash
-# Stop Qdrant (data persists)
-docker-compose down
+- Optimized for security benchmarks
+- Captures 1-2 complete subsections
+- ~300-400 tokens (efficient for LLM context)
+- Good balance of specificity and context
 
-# Stop and remove all data
-docker-compose down -v
-```
+### Why Ensemble Retrieval?
+
+- ✅ **Multiple Strategies**: Combines semantic, lexical, and precision approaches
+- ✅ **BM25 for Exact Terms**: Crucial for security docs with specific identifiers (e.g., "CIS Control 5.2.1")
+- ✅ **Cohere Precision**: Cross-encoder reranking improves document relevance
+- ✅ **Reciprocal Rank Fusion**: Intelligently merges diverse retrieval sources
+- ✅ **Measurable Improvements**: Gains across multiple RAGAS metrics
+- ✅ **Production-Ready**: Efficient, scalable, and well-supported by LangChain
 
 ---
 
 ## 📝 Notes
 
-### Storage Modes
+### Agentic Workflow
 
-**In-Memory Mode (`QDRANT_MODE=memory`)**:
-- ✅ Quick setup, no Docker required
-- ✅ Fast performance
-- ❌ Data lost on restart
-- ✅ Good for: Development, testing
+The multi-agent system provides:
+1. **Analysis Agent**: Retrieves security documentation from vector store
+2. **Research Agent**: Searches web for implementation examples (conditional)
+3. **Planning Agent**: Synthesizes comprehensive implementation plan
 
-**Docker Mode (`QDRANT_MODE=docker`)**:
-- ✅ Data persists between restarts
-- ✅ Production-ready
-- ✅ Scalable
-- ❌ Requires Docker
-- ✅ Good for: Production, persistent storage
+**When web search triggers:**
+- Question is relevant to security/IT (via LLM filter)
+- No sufficient context found in vector store
+- Tavily API key is configured
 
----
+### Fair Comparison
 
-### Chunking Strategy
+Both baseline and advanced return **3 final documents**:
+- **Baseline**: Best 3 from vector search
+- **Advanced**: Best 3 from ensemble fusion (Vector + BM25 + Cohere)
 
-The default settings (`CHUNK_SIZE=1500`, `CHUNK_OVERLAP=300`) are optimized for ISO standards because:
-- ISO documents have clear hierarchical sections
-- 1500 characters ≈ 1-2 complete subsections
-- 300 overlap ensures cross-references stay connected
-
-Adjust these values based on your documents:
-- **Technical docs with sections**: 1500-2000 chunk size
-- **Dense continuous text**: 1000-1500 chunk size
-- **Short articles**: 500-1000 chunk size
+This ensures fair comparison while demonstrating the value of combining multiple retrieval strategies.
 
 ---
 
@@ -561,24 +718,24 @@ Adjust these values based on your documents:
 
 - [FastAPI Documentation](https://fastapi.tiangolo.com/)
 - [LangChain Documentation](https://python.langchain.com/)
+- [LangGraph Documentation](https://langchain-ai.github.io/langgraph/)
 - [Qdrant Documentation](https://qdrant.tech/documentation/)
 - [OpenAI API Documentation](https://platform.openai.com/docs)
-
----
-
-## 📄 License
-
-This project is for educational and internal use with ISO standard documents.
+- [Cohere Rerank Documentation](https://docs.cohere.com/docs/reranking)
+- [RAGAS Documentation](https://docs.ragas.io/)
 
 ---
 
 ## 🤝 Support
 
 For issues or questions:
-1. Check the [Troubleshooting](#troubleshooting) section
+1. Check the [Troubleshooting](#-troubleshooting) section
 2. Review API documentation at `/docs`
 3. Check application logs for error details
+4. See `ragas/README.md` for evaluation-specific help
 
 ---
 
-**Happy RAG-ing! 🚀**
+**Built with ❤️ for security professionals**
+
+Happy RAG-ing! 🚀

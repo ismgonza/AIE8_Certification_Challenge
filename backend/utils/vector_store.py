@@ -118,7 +118,7 @@ class VectorStore:
     
     def search(self, query: str, top_k: int = 3) -> List[Document]:
         """
-        Search for similar documents.
+        Search for similar documents using vector similarity.
         
         Args:
             query: Search query
@@ -136,9 +136,9 @@ class VectorStore:
                     embedding=self.embeddings
                 )
             
-            logger.info(f"Searching for: '{query}' (top_k={top_k})")
+            logger.info(f"🔍 Vector search for: '{query}' (top_k={top_k})")
             
-            # Search
+            # Vector similarity search using OpenAI embeddings
             results = self.vector_store.similarity_search(query, k=top_k)
             
             logger.info(f"Found {len(results)} results")
@@ -179,6 +179,28 @@ class VectorStore:
         except Exception as e:
             logger.error(f"Error searching with scores: {e}")
             raise
+    
+    
+    def as_retriever(self, **kwargs):
+        """
+        Return the underlying vector store as a retriever.
+        Allows our VectorStore to be used with LangChain's retriever interface.
+        
+        Args:
+            **kwargs: Arguments to pass to as_retriever (e.g., search_kwargs={"k": 5})
+            
+        Returns:
+            LangChain retriever instance
+        """
+        if not self.vector_store:
+            # Initialize vector store
+            self.vector_store = QdrantVectorStore(
+                client=self.client,
+                collection_name=self.collection_name,
+                embedding=self.embeddings
+            )
+        
+        return self.vector_store.as_retriever(**kwargs)
     
     
     def delete_collection(self) -> None:
@@ -241,7 +263,7 @@ if __name__ == "__main__":
     
     # Test search
     print("\n🔍 Testing search...")
-    query = "What is ISO 27001?"
+    query = "What are the CIS Controls?"
     results = vs.search(query, top_k=3)
     
     print(f"\nQuery: {query}")

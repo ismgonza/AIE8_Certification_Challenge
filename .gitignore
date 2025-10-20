@@ -1,17 +1,56 @@
-.venv
-__pycache__
-.env
+# Frontend
+node_modules
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.pytest_cache
+.ruff_cache
+.mypy_cache
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+env/
 .python-version
 uv.lock
-node_modules
-dist
-build
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment Variables
+.env
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+
+# Evaluation Results (CSV files are generated, keep folder structure)
+backend/ragas/results/*.csv
+backend/ragas/golden_data_kg.json
+backend/ragas/golden_test_data.csv
+
+# Qdrant Storage (large files, regenerate as needed)
+docker/qdrant_storage
+
+# OS
 .DS_Store
+Thumbs.db
 .vscode
-.idea
-.pytest_cache
-.ruff_cache
-.mypy_cache
-.pytest_cache
-.ruff_cache
-.mypy_cache
+
+# Logs
+*.log

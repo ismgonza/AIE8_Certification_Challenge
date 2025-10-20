@@ -10,7 +10,7 @@ from langchain.schema import Document
 from utils import settings
 from utils.vector_store import VectorStore
 from utils.tools import search_tavily
-from utils.prompts import IMPLEMENTATION_CONSULTANT_PROMPT
+from utils.prompts import SECURITY_ADVISOR_PROMPT
 
 # Setup logging
 logging.basicConfig(level=settings.LOG_LEVEL)
@@ -29,7 +29,10 @@ class RAGPipeline:
         temperature: float = 0.0,
         top_k: int = 3,
         use_tavily: bool = True,
-        use_agents: bool = True
+        use_agents: bool = True,
+        use_reranking: bool = False,
+        reranker_model: str = "cohere",
+        use_ensemble: bool = False
     ):
         """
         Initialize RAG pipeline.
@@ -41,17 +44,39 @@ class RAGPipeline:
             top_k: Number of chunks to retrieve
             use_tavily: Enable Tavily search for real-world examples
             use_agents: Use multi-agent LangGraph workflow (recommended)
+            use_reranking: Enable Cohere reranking [Task 6] (deprecated, use ensemble)
+            reranker_model: Reranker model (default: "cohere")
+            use_ensemble: Enable ensemble retrieval (Vector + BM25 + Cohere) [Task 6]
         """
         self.vector_store = vector_store or VectorStore()
         self.top_k = top_k
-        self.use_tavily = use_tavily and settings.TAVILY_API_KEY
+        self.use_tavily = use_tavily and bool(settings.TAVILY_API_KEY)
         self.use_agents = use_agents
         
+        # Advanced retrieval flags (Task 6)
+        self.use_reranking = use_reranking
+        self.reranker_model = reranker_model
+        self.use_ensemble = use_ensemble
+        self.ensemble_retriever = None
+        
+        # Log enabled features
         if self.use_tavily:
             logger.info("✅ Tavily search enabled")
         
         if self.use_agents:
             logger.info("✅ Multi-agent mode enabled")
+        
+        # Log advanced retrieval features
+        if self.use_ensemble:
+            logger.info("🚀 Advanced Retrieval: Ensemble (Vector + BM25 + Cohere)")
+            from utils.advanced_retrieval import get_ensemble_retriever
+            self.ensemble_retriever = get_ensemble_retriever(
+                self.vector_store,
+                top_k=self.top_k,
+                use_cohere=bool(settings.COHERE_API_KEY)
+            )
+        elif self.use_reranking:
+            logger.info(f"🚀 Advanced Retrieval: Reranking ({self.reranker_model}) [Legacy]")
         
         # Initialize LLM
         self.llm = ChatOpenAI(
@@ -61,14 +86,14 @@ class RAGPipeline:
         )
         
         # Set prompt template
-        self.prompt = IMPLEMENTATION_CONSULTANT_PROMPT
+        self.prompt = SECURITY_ADVISOR_PROMPT
         
         logger.info(f"✅ RAG Pipeline initialized (model={self.llm.model_name}, top_k={self.top_k})")
     
     
     def retrieve(self, query: str) -> List[Document]:
         """
-        Retrieve relevant documents.
+        Retrieve relevant documents with optional advanced techniques.
         
         Args:
             query: Search query
@@ -77,7 +102,33 @@ class RAGPipeline:
             List of relevant Documents
         """
         logger.info(f"Retrieving top {self.top_k} chunks for query: '{query}'")
-        results = self.vector_store.search(query, top_k=self.top_k)
+        
+        # Use ensemble retrieval if enabled (Vector + BM25 + Cohere)
+        if self.use_ensemble and self.ensemble_retriever:
+            logger.info("Using ensemble retrieval (Vector + BM25 + Cohere)")
+            results = self.ensemble_retriever.get_relevant_documents(query)
+            # Ensemble returns all results, trim to top_k
+            results = results[:self.top_k]
+            logger.info(f"✅ Retrieved {len(results)} documents via ensemble")
+            return results
+        
+        # Fallback: Legacy reranking or simple vector search
+        # Get more docs if we're going to rerank (better recall)
+        initial_top_k = self.top_k * 3 if self.use_reranking else self.top_k
+        
+        results = self.vector_store.search(query, top_k=initial_top_k)
+        
+        # Step 2: Reranking (if enabled - legacy approach)
+        if self.use_reranking and len(results) > self.top_k:
+            from utils.advanced_retrieval import rerank_documents
+            results = rerank_documents(
+                query, 
+                results, 
+                top_k=self.top_k,
+                model=self.reranker_model
+            )
+        
+        logger.info(f"✅ Retrieved {len(results)} final documents")
         return results
     
     
@@ -94,8 +145,8 @@ class RAGPipeline:
         Returns:
             Generated answer
         """
-        # Format context from ISO documents
-        context = "**ISO 27001/27002 Documentation:**\n\n"
+        # Format context from security documentation
+        context = "**Security Documentation (CIS, NIST, OWASP, CSA):**\n\n"
         context += "\n\n".join([doc.page_content for doc in context_docs])
         
         # Add Tavily results if available
@@ -126,7 +177,12 @@ class RAGPipeline:
         # Use agentic workflow if enabled
         if self.use_agents:
             from utils.agents import run_agentic_rag
-            return run_agentic_rag(question)
+            return run_agentic_rag(
+                question,
+                use_reranking=self.use_reranking,
+                reranker_model=self.reranker_model,
+                use_ensemble=self.use_ensemble
+            )
         
         # Otherwise use simple RAG (fallback)
         logger.info("Using simple RAG pipeline")
@@ -175,10 +231,10 @@ if __name__ == "__main__":
     rag = RAGPipeline(top_k=3)
     
     # Query
-    result = rag.query("What is ISO 27001?")
+    result = rag.query("What are the CIS Controls?")
     
     print(f"\n{'='*60}")
-    print(f"Question: What is ISO 27001?")
+    print(f"Question: What are the CIS Controls?")
     print(f"\nAnswer:\n{result['answer']}")
     print(f"\nSources: {len(result['sources'])} chunks")
     print(f"{'='*60}\n")

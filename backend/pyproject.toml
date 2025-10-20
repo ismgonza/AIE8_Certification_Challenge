@@ -1,30 +1,45 @@
 [project]
 name = "backend"
-version = "0.1.0"
-description = "RAG system for ISO 27001/27002 documents"
+version = "0.1.1"
+description = "RAG system for Security Guidelines"
+authors = [
+    { name = "Ismael Gonzalez" }
+]
+readme = "README.md"
 requires-python = ">=3.10"
-
 dependencies = [
     # FastAPI
     "fastapi>=0.104.0",
     "uvicorn[standard]>=0.24.0",
     "pydantic>=2.0.0",
     # LangChain
-    "langchain>=0.1.0",
+    "langchain>=0.3.19",
     "langchain-community>=0.0.10",
-    "langchain-openai>=0.0.5",
+    "langchain-openai>=0.3.7",
     "langgraph>=0.0.40",
     "langchain-core>=0.1.0",
     # Vector Store
-    "qdrant-client>=1.7.0",
-    "langchain-qdrant>=0.1.0",
+    "qdrant-client>=1.13.2",
+    "langchain-qdrant>=0.2.0",
     # Document Processing
-    "pymupdf>=1.23.0",
+    "pymupdf>=1.26.5",
     # Utilities
-    "python-dotenv>=1.0.0",
+    "python-dotenv>=1.0.1",
     "python-multipart>=0.0.20",
+    "markdownify>=0.11.6",
     # Search
     "tavily-python>=0.3.0",
+    # Advanced Retrieval (Task 6)
+    "cohere>=5.12.0,<5.13.0",
+    "langchain-cohere==0.4.4",
+    "rank-bm25>=0.2.2",
+    # RAGAS Evaluation
+    "ragas==0.2.10",
+    # Jupyter & Analysis
+    "jupyter>=1.1.1",
+    "pandas>=2.0.0",
+    "ipykernel>=7.0.1",
+    "rapidfuzz>=3.14.1",
 ]
 
 # [project.optional-dependencies]

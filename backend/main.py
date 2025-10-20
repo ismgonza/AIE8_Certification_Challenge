@@ -1,20 +1,16 @@
 """
-FastAPI backend for RAG system.
+FastAPI backend for Security Maturity Assistant.
 """
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 import logging
-import tempfile
-from pathlib import Path
 
 from utils import settings
-from utils.document_processor import process_pdfs, process_uploaded_files
+from utils.document_processor import process_pdfs
 from utils.vector_store import VectorStore
 from utils.rag import RAGPipeline
-from utils.standards import get_available_standards, get_standard_info, get_controls_for_standard
-from standards.iso_27001_controls import get_high_priority_controls, get_control_by_id
 
 # Setup logging
 logging.basicConfig(level=settings.LOG_LEVEL)
@@ -22,9 +18,9 @@ logger = logging.getLogger(__name__)
 
 # Initialize FastAPI app
 app = FastAPI(
-    title="ISO RAG API",
-    description="RAG system for ISO 27001/27002 documents",
-    version="1.0.0"
+    title="Security Maturity Assistant API",
+    description="AI-powered security assessment and guidance for SMBs",
+    version="2.0.0"
 )
 
 # Add CORS middleware (for frontend)
@@ -56,9 +52,11 @@ def get_rag_pipeline() -> RAGPipeline:
         vs = get_vector_store()
         rag_pipeline = RAGPipeline(
             vector_store=vs,
-            top_k=5,  # Get more context for better answers
+            top_k=settings.TOP_K,  # Get more context for better answers
             use_tavily=True,  # Search web for implementation examples
-            use_agents=True  # Multi-agent workflow for better quality
+            use_agents=True,  # Multi-agent workflow for better quality
+            use_reranking=settings.USE_RERANKING,  # Cohere reranking (from .env)
+            reranker_model=settings.RERANKER_MODEL  # Reranker model choice (from .env)
         )
     return rag_pipeline
 
@@ -69,7 +67,7 @@ def get_rag_pipeline() -> RAGPipeline:
 
 class QueryRequest(BaseModel):
     query: str
-    top_k: Optional[int] = 3
+    top_k: Optional[int] = 5
 
 
 class Source(BaseModel):
@@ -83,16 +81,32 @@ class QueryResponse(BaseModel):
     sources: List[Source]
 
 
-class IngestResponse(BaseModel):
-    message: str
-    total_chunks: int
+class AssessmentRequest(BaseModel):
+    company_name: str
+    company_size: str  # "1-10", "11-50", "51-200", "201-500", "500+"
+    industry: str
+    tech_stack: List[str]  # ["Windows", "Microsoft 365", "Cloud", etc.]
+    security_measures: Optional[str] = "None"
+    budget: Optional[str] = None
+    main_concern: Optional[str] = None
 
 
-class CollectionInfo(BaseModel):
-    name: str
-    vectors_count: Optional[int] = None
-    points_count: int
-    status: str
+class SecurityGap(BaseModel):
+    priority: str  # "critical", "high", "medium"
+    title: str
+    description: str
+    risk: str
+    cost: str
+    time: str
+    cis_control: Optional[str] = None
+
+
+class AssessmentResponse(BaseModel):
+    company_name: str
+    maturity_score: float  # 0-10
+    maturity_level: str  # "Level 1: Survival Mode", etc.
+    risk_summary: str
+    top_gaps: List[SecurityGap]
 
 
 class DocumentItem(BaseModel):
@@ -106,166 +120,202 @@ class DocumentsResponse(BaseModel):
     documents: List[DocumentItem]
 
 
-class CompanyProfile(BaseModel):
-    company_name: str
-    company_size: str
-    industry: str
-    tech_stack: List[str]
-    deadline_months: Optional[int] = 6
-
-
-class Control(BaseModel):
-    id: str
-    title: str
-    theme: str
-    priority: str
-    estimated_hours: int
-    owner: str
-    deliverables: List[str]
-    description: str
-    status: Optional[str] = "pending"  # pending, in_progress, completed
-
-
-class ControlsResponse(BaseModel):
-    total: int
-    completed: int
-    in_progress: int
-    pending: int
-    controls: List[Control]
+class CollectionInfo(BaseModel):
+    name: str
+    vectors_count: Optional[int] = None
+    points_count: int
+    status: str
 
 
 # ============================================================================
-# Endpoints
+# Startup Event - Auto-ingest PDFs
+# ============================================================================
+
+@app.on_event("startup")
+async def startup_event():
+    """Auto-ingest PDFs from data folder on startup (only if needed)."""
+    try:
+        logger.info("🚀 Starting Security Maturity Assistant...")
+        
+        vs = get_vector_store()
+        
+        # Check if collection exists and has documents
+        try:
+            collection_info = vs.get_collection_info()
+            vectors_count = collection_info.get("vectors_count", 0) or collection_info.get("points_count", 0)
+            
+            logger.info(f"📊 Collection status: {vectors_count} documents in Qdrant")
+            
+            if vectors_count > 0:
+                logger.info(f"✅ Vector store ready with {vectors_count:,} documents")
+                logger.info("⚡ Skipping PDF ingestion (documents already loaded)")
+                logger.info("✨ Security Maturity Assistant ready!")
+                return  # Early exit - no need to ingest
+            else:
+                logger.info("📚 Collection exists but is empty")
+                
+        except Exception as e:
+            logger.info(f"📚 Collection doesn't exist yet: {e}")
+        
+        # Only reach here if collection is empty or doesn't exist
+        logger.info("📚 Ingesting PDFs from data folder (this will take 1-2 minutes)...")
+        logger.info("💡 This only happens once - subsequent startups will be instant!")
+        
+        chunks = process_pdfs()
+        
+        if len(chunks) == 0:
+            logger.warning("⚠️ No PDF chunks found! Make sure PDFs are in backend/data/ folder")
+        else:
+            logger.info(f"📄 Processing {len(chunks)} chunks...")
+            vs.add_documents(chunks)
+            logger.info(f"✅ Ingested {len(chunks):,} chunks into Qdrant")
+        
+        logger.info("✨ Security Maturity Assistant ready!")
+        
+    except Exception as e:
+        logger.error(f"❌ Error during startup: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        logger.warning("⚠️ Server will start, but RAG may not work until documents are ingested")
+        # Don't crash the server, but log the error
+
+
+# ============================================================================
+# API Endpoints
 # ============================================================================
 
 @app.get("/")
 async def root():
-    """Health check endpoint."""
+    """Root endpoint."""
     return {
-        "status": "ok",
-        "message": "ISO Implementation Assistant API",
+        "message": "Security Maturity Assistant API",
         "version": "2.0.0",
-        "supported_standards": ["ISO_27001", "ISO_31000", "ISO_19011", "ISO_9001"]
+        "docs": "/docs"
     }
 
 
-@app.get("/standards")
-async def get_standards():
+@app.post("/assess")
+async def assess_security(request: AssessmentRequest) -> AssessmentResponse:
     """
-    Get all supported standards (current and coming soon).
-    """
-    try:
-        standards = get_available_standards()
-        return {"standards": standards}
-    except Exception as e:
-        logger.error(f"Error getting standards: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/controls", response_model=ControlsResponse)
-async def get_controls(standard: str = "ISO_27001"):
-    """
-    Get all controls for a specific standard.
-    Defaults to ISO 27001 for backwards compatibility.
+    Assess company's security maturity and provide recommendations.
     """
     try:
-        controls = get_controls_for_standard(standard)
+        rag = get_rag_pipeline()
         
-        if not controls:
-            raise HTTPException(
-                status_code=404, 
-                detail=f"Standard '{standard}' not found or not yet implemented"
-            )
-        
-        # For now, all controls are pending
-        # In future, load from database
-        controls_with_status = [Control(**c, status="pending") for c in controls]
-        
-        return ControlsResponse(
-            total=len(controls_with_status),
-            completed=0,
-            in_progress=0,
-            pending=len(controls_with_status),
-            controls=controls_with_status
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting controls: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        # Build assessment query
+        query = f"""Assess the security maturity of this company and provide TOP 5 CRITICAL security gaps:
 
-
-@app.get("/controls/priority/high")
-async def get_priority_controls():
-    """
-    Get high-priority controls (recommended to do first).
-    """
-    try:
-        controls = get_high_priority_controls()
-        return {"controls": controls}
-    except Exception as e:
-        logger.error(f"Error getting priority controls: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/controls/{control_id}")
-async def get_control_detail(control_id: str):
-    """
-    Get detailed information about a specific control.
-    """
-    try:
-        control = get_control_by_id(control_id)
-        if not control:
-            raise HTTPException(status_code=404, detail="Control not found")
-        return control
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting control {control_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-class ImplementRequest(BaseModel):
-    company_size: Optional[str] = "50-100"
-    industry: Optional[str] = "Software/SaaS"
-    tech_stack: Optional[List[str]] = ["Cloud", "SaaS"]
-    deadline_months: Optional[int] = 6
-
-
-@app.post("/controls/{control_id}/implement")
-async def generate_implementation_guide(control_id: str, request: ImplementRequest):
-    """
-    Generate implementation guide for a specific control.
-    Uses agentic RAG to create customized guidance.
-    """
-    try:
-        control = get_control_by_id(control_id)
-        if not control:
-            raise HTTPException(status_code=404, detail="Control not found")
-        
-        # Build customized question with company context
-        question = f"""How do I implement ISO 27001 Control {control_id} ({control['title']})?
-
-Company Context:
-- Size: {request.company_size}
+Company Profile:
+- Name: {request.company_name}
+- Size: {request.company_size} employees
 - Industry: {request.industry}
 - Tech Stack: {', '.join(request.tech_stack)}
-- Deadline: {request.deadline_months} months"""
+- Current Security: {request.security_measures or 'Minimal/None'}
+- Budget: {request.budget or 'Limited'}
+- Main Concern: {request.main_concern or 'General security'}
+
+Based on CIS Controls IG1 (small business appropriate) and relevant benchmarks:
+
+1. Calculate a security maturity score (0-10) based on their current state
+2. Identify their maturity level (Survival, Baseline, Professional, Advanced)
+3. List TOP 5 CRITICAL security gaps they should fix
+4. For each gap provide:
+   - Why it's critical for THEIR situation
+   - Specific risk if ignored
+   - Estimated cost
+   - Time to implement
+   - Reference CIS Control
+
+Focus on PRACTICAL, AFFORDABLE recommendations appropriate for {request.company_size} company."""
+
+        result = rag.query(query, return_sources=True)
         
-        # Use RAG pipeline to generate guide
-        rag = get_rag_pipeline()
-        result = rag.query(question, return_sources=True)
+        # Extract score and level from AI response
+        import re
+        answer = result["answer"]
+        
+        # Try to extract score (look for patterns like "8/10", "Score: 8", etc.)
+        score_match = re.search(r'(?:score|maturity)[:\s]*(\d+(?:\.\d+)?)\s*/\s*10', answer, re.IGNORECASE)
+        maturity_score = float(score_match.group(1)) if score_match else 3.5
+        
+        # Try to extract level (Survival, Baseline, Professional, Advanced)
+        level_match = re.search(r'(Level \d+:|Maturity Level:)\s*([^\n]+)', answer, re.IGNORECASE)
+        if level_match:
+            maturity_level = level_match.group(2).strip()
+        else:
+            # Fallback based on score
+            if maturity_score < 3:
+                maturity_level = "Level 1: Survival Mode"
+            elif maturity_score < 5:
+                maturity_level = "Level 2: Baseline Security"
+            elif maturity_score < 7:
+                maturity_level = "Level 3: Professional"
+            else:
+                maturity_level = "Level 4: Advanced"
         
         return {
-            "control_id": control_id,
-            "control_title": control["title"],
-            "implementation_guide": result["answer"],
+            "company_name": request.company_name,
+            "maturity_score": maturity_score,
+            "maturity_level": maturity_level,
+            "risk_summary": answer[:500],  # First 500 chars
+            "top_gaps": [
+                {
+                    "priority": "critical",
+                    "title": "Full assessment in answer field",
+                    "description": answer,
+                    "risk": "See full analysis",
+                    "cost": "Varies",
+                    "time": "Varies",
+                    "cis_control": "Multiple"
+                }
+            ]
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in assessment: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/query")
+async def query_documents(request: QueryRequest) -> QueryResponse:
+    """
+    Query the RAG system.
+    """
+    try:
+        rag = get_rag_pipeline()
+        result = rag.query(request.query, return_sources=True)
+        
+        return {
+            "answer": result["answer"],
             "sources": result.get("sources", [])
         }
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"Error generating implementation guide: {e}")
+        logger.error(f"Error querying: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/documents")
+async def list_documents(limit: int = 10, offset: int = 0) -> DocumentsResponse:
+    """
+    List documents in vector store (for debugging).
+    """
+    try:
+        vs = get_vector_store()
+        docs = vs.list_documents(limit=limit, offset=offset)
+        
+        return {
+            "total": len(docs),
+            "documents": [
+                {
+                    "id": doc.get("id", "unknown"),
+                    "content": doc.get("content", "")[:200] + "...",
+                    "metadata": doc.get("metadata", {})
+                }
+                for doc in docs
+            ]
+        }
+    except Exception as e:
+        logger.error(f"Error listing documents: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -275,207 +325,163 @@ async def health_check():
     vs = get_vector_store()
     collection_info = vs.get_collection_info()
     
+    vectors_count = collection_info.get("vectors_count", 0) or collection_info.get("points_count", 0)
+    
     return {
         "status": "healthy",
+        "version": "2.0.0",
+        "vector_store": {
+            "collection": collection_info.get("name", "unknown"),
+            "documents": vectors_count,
+            "status": collection_info.get("status", "unknown"),
+            "message": "✅ Ready" if vectors_count > 0 else "⚠️ No documents loaded"
+        },
         "settings": {
             "data_path": str(settings.DATA_PATH),
-            "chunk_size": settings.CHUNK_SIZE,
-            "chunk_overlap": settings.CHUNK_OVERLAP,
             "llm_model": settings.LLM_MODEL,
-            "embedding_model": settings.EMBEDDING_MODEL,
-            "qdrant_mode": settings.QDRANT_MODE,
-            "collection_name": settings.QDRANT_COLLECTION,
-        },
-        "vector_store": collection_info
+            "embedding_model": settings.EMBEDDING_MODEL
+        }
     }
 
 
-@app.post("/upload", response_model=IngestResponse)
-async def upload_documents(
-    files: List[UploadFile] = File(...),
-    clear_existing: bool = False
-):
+@app.post("/admin/reingest")
+async def force_reingest():
     """
-    Upload PDF files and ingest them into vector store.
-    
-    Args:
-        files: List of PDF files to upload
-        clear_existing: If True, clear vector store before ingesting
+    Manually trigger re-ingestion of PDFs.
+    Use this only if you've added new PDFs or want to refresh the database.
     """
     try:
-        logger.info(f"Received {len(files)} files for upload")
+        logger.info("🔄 Manual re-ingestion triggered")
         
-        # Validate files are PDFs
-        for file in files:
-            if not file.filename.endswith('.pdf'):
-                raise HTTPException(
-                    status_code=400, 
-                    detail=f"File {file.filename} is not a PDF"
-                )
-        
-        # Clear existing if requested
-        vs = get_vector_store()
-        if clear_existing:
-            logger.info("Clearing existing documents...")
-            try:
-                vs.delete_collection()
-            except:
-                pass
-        
-        # Read uploaded files
-        file_data = []
-        for file in files:
-            content = await file.read()
-            file_data.append((file.filename, content))
-        
-        # Process files in temp directory
-        with tempfile.TemporaryDirectory() as temp_dir:
-            chunks = process_uploaded_files(file_data, Path(temp_dir))
-            vs.add_documents(chunks)
-        
-        logger.info(f"✅ Successfully ingested {len(chunks)} chunks from {len(files)} files")
-        
-        return IngestResponse(
-            message=f"Successfully uploaded and ingested {len(files)} PDF(s)",
-            total_chunks=len(chunks)
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error during upload: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/query", response_model=QueryResponse)
-async def query(request: QueryRequest):
-    """
-    Query the RAG system.
-    """
-    try:
-        logger.info(f"Received query: {request.query}")
-        
-        # Get RAG pipeline
-        rag = get_rag_pipeline()
-        
-        # Process query
-        result = rag.query(request.query, return_sources=True)
-        
-        # Format response
-        sources = [
-            Source(
-                content=src["content"],
-                metadata=src["metadata"]
-            )
-            for src in result["sources"]
-        ]
-        
-        return QueryResponse(
-            answer=result["answer"],
-            sources=sources
-        )
-    except Exception as e:
-        logger.error(f"Error during query: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/collection/info", response_model=CollectionInfo)
-async def get_collection_info():
-    """
-    Get information about the vector store collection.
-    """
-    try:
-        vs = get_vector_store()
-        info = vs.get_collection_info()
-        
-        if not info:
-            raise HTTPException(status_code=404, detail="Collection not found")
-        
-        return CollectionInfo(**info)
-    except Exception as e:
-        logger.error(f"Error getting collection info: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/documents", response_model=DocumentsResponse)
-async def get_documents(limit: int = 10, offset: int = 0):
-    """
-    Browse documents in the vector store.
-    """
-    try:
         vs = get_vector_store()
         
-        # Get documents from Qdrant
-        from qdrant_client.models import Filter
+        # Get current count
+        collection_info = vs.get_collection_info()
+        old_count = collection_info.get("vectors_count", 0) or collection_info.get("points_count", 0)
         
-        result = vs.client.scroll(
-            collection_name=vs.collection_name,
-            limit=limit,
-            offset=offset,
-            with_payload=True,
-            with_vectors=False
-        )
+        logger.info(f"Current: {old_count} documents")
+        logger.info("📚 Processing PDFs...")
         
-        points, _ = result
+        chunks = process_pdfs()
         
-        # Get total count
-        collection_info = vs.client.get_collection(vs.collection_name)
-        total = collection_info.points_count or 0
+        if len(chunks) == 0:
+            return {"error": "No PDF chunks found in data folder"}
         
-        # Format documents
-        documents = [
-            DocumentItem(
-                id=str(point.id),
-                content=point.payload.get("page_content", ""),
-                metadata=point.payload.get("metadata", {})
-            )
-            for point in points
-        ]
+        logger.info(f"📄 Adding {len(chunks)} new chunks...")
+        vs.add_documents(chunks)
         
-        return DocumentsResponse(total=total, documents=documents)
+        # Get new count
+        collection_info = vs.get_collection_info()
+        new_count = collection_info.get("vectors_count", 0) or collection_info.get("points_count", 0)
+        
+        return {
+            "message": "Re-ingestion complete",
+            "old_count": old_count,
+            "new_chunks": len(chunks),
+            "new_count": new_count,
+            "added": new_count - old_count
+        }
+        
     except Exception as e:
-        logger.error(f"Error getting documents: {e}")
+        logger.error(f"Error during re-ingestion: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.delete("/clear")
+@app.delete("/admin/clear")
 async def clear_vector_store():
     """
-    Clear all documents from vector store.
+    Clear entire vector store (delete all documents).
+    ⚠️ WARNING: This deletes ALL documents! Use with caution.
     """
     try:
-        logger.info("Clearing vector store...")
+        logger.warning("⚠️ CLEARING ENTIRE VECTOR STORE")
+        
         vs = get_vector_store()
-        vs.delete_collection()
         
-        logger.info("✅ Vector store cleared")
+        # Get count before deletion
+        collection_info = vs.get_collection_info()
+        count_before = collection_info.get("vectors_count", 0) or collection_info.get("points_count", 0)
         
-        return {"message": "Vector store cleared successfully"}
+        # Delete the collection
+        vs.client.delete_collection(vs.collection_name)
+        logger.info(f"🗑️ Deleted collection: {vs.collection_name}")
+        
+        # Recreate empty collection
+        vs.client.create_collection(
+            collection_name=vs.collection_name,
+            vectors_config={
+                "size": 1536,  # OpenAI embedding dimension
+                "distance": "Cosine"
+            }
+        )
+        logger.info(f"✅ Recreated empty collection: {vs.collection_name}")
+        
+        return {
+            "message": "Vector store cleared successfully",
+            "documents_deleted": count_before,
+            "collection": vs.collection_name,
+            "warning": "Collection is now empty. Run /admin/reingest to reload documents."
+        }
+        
     except Exception as e:
         logger.error(f"Error clearing vector store: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ============================================================================
-# Startup/Shutdown Events
-# ============================================================================
+@app.delete("/admin/documents/{source_name}")
+async def delete_documents_by_source(source_name: str):
+    """
+    Delete all documents from a specific source file.
+    
+    Example: DELETE /admin/documents/CIS_Controls_Guide_v8.1.2_0325_v2.pdf
+    """
+    try:
+        logger.info(f"🗑️ Deleting documents from source: {source_name}")
+        
+        vs = get_vector_store()
+        
+        # Get current count
+        collection_info = vs.get_collection_info()
+        count_before = collection_info.get("vectors_count", 0) or collection_info.get("points_count", 0)
+        
+        # Delete by metadata filter
+        from qdrant_client.models import Filter, FieldCondition, MatchValue
+        
+        # Try to delete with full path or just filename
+        deleted_count = 0
+        for source_pattern in [source_name, f"*/{source_name}"]:
+            result = vs.client.delete(
+                collection_name=vs.collection_name,
+                points_selector=Filter(
+                    must=[
+                        FieldCondition(
+                            key="source",
+                            match=MatchValue(value=source_pattern)
+                        )
+                    ]
+                )
+            )
+            if result:
+                deleted_count += 1
+        
+        # Get count after deletion
+        collection_info = vs.get_collection_info()
+        count_after = collection_info.get("vectors_count", 0) or collection_info.get("points_count", 0)
+        
+        actual_deleted = count_before - count_after
+        
+        return {
+            "message": f"Documents from '{source_name}' deleted" if actual_deleted > 0 else "No matching documents found",
+            "source": source_name,
+            "documents_before": count_before,
+            "documents_after": count_after,
+            "deleted": actual_deleted
+        }
+        
+    except Exception as e:
+        logger.error(f"Error deleting documents: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.on_event("startup")
-async def startup_event():
-    """Initialize on startup."""
-    logger.info("🚀 Starting ISO RAG API...")
-    logger.info(f"Data path: {settings.DATA_PATH}")
-    logger.info(f"Qdrant mode: {settings.QDRANT_MODE}")
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Cleanup on shutdown."""
-    logger.info("👋 Shutting down ISO RAG API...")
-
-
-# ============================================================================
-# Run with: uvicorn main:app --reload
-# ============================================================================
 
 if __name__ == "__main__":
     import uvicorn
