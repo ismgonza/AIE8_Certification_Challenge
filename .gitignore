@@ -45,7 +45,7 @@ backend/ragas/golden_data_kg.json
 backend/ragas/golden_test_data.csv
 
 # Qdrant Storage (large files, regenerate as needed)
-docker/qdrant_storage
+backend/docker/qdrant_storage/
 
 # OS
 .DS_Store
