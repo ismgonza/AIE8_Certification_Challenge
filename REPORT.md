@@ -304,7 +304,7 @@ Decision Logic:
 - **4 out of 5 metrics improved** with ensemble retrieval
 - **Retrieval quality up 3.17%** (avg of precision/recall)
 - **Generation quality up 3.73%** (avg of faithfulness/relevancy)
-- **Trade-off**: Factual correctness decreased because our prompt encourages detailed, actionable responses (with commands, pricing, examples) that diverge from terse reference answers—this is a design choice for user helpfulness, not a retrieval failure
+- **Trade-off**: Factual correctness decreased because the prompt encourages detailed, actionable responses (with commands, pricing, examples) that diverge from terse reference answers—this is a design choice for user helpfulness, not a retrieval failure
 
 **Conclusion**: Ensemble retrieval (Vector + BM25 + Cohere) measurably improves the system. Cost is minimal (+$0.01/query, +200ms latency), quality gains are real. **Recommended for production**.
 
