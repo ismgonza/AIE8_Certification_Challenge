@@ -302,13 +302,15 @@ Decision Logic:
 
 **Conclusion**: Ensemble retrieval (Vector + BM25 + Cohere) measurably improves the system. Cost is minimal (+$0.01/query, +200ms latency), quality gains are real. **Recommended for production**.
 
-### Future Improvements (Second Half of Course)
+### Future Improvements
 
 1. **Conversational Memory**: Store last 3-5 Q&A pairs per session to handle follow-up questions and maintain context across related queries
 2. **Metadata Filtering**: Filter retrieval by user profile (company size, tech stack, industry) to return only relevant documentation instead of generic results
 3. **Query Clarification**: Detect vague queries (< 5 words) and either prompt user for details or use LLM to expand query for better retrieval
+4. **RAG Prompts Tuning**: Refine the RAG prompts and develop new ones to improve accuracy in response
+5. **Frontend Enhancements**: Redesign frontend, improve structure of responses
 
-**Note**: Additional enhancements might be added as well.
+**Note**: This might not be the core of the final project, however there is a high chance that this app could be included as part of its features.
 
 ---
 
