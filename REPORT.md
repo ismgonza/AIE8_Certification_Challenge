@@ -156,6 +156,77 @@ User Input → LangGraph Orchestrator
    - Agent generates step-by-step guide
 3. Frontend renders with copy buttons
 
+**Agentic RAG flow in mermaid format**
+
+```mermaid
+graph TD
+   A[👤 User Query<br/>POST /query] --> B{🔒 Relevance Check<br/>Security/IT/Tech topic?}
+   
+   B -->|Not Relevant| Z[❌ Out of Scope<br/>Return rejection message]
+   B -->|Relevant| C[🔍 Analysis Agent<br/>Retrieve & analyze docs]
+   
+   C --> C1[📊 Vector Store<br/>Qdrant + OpenAI embeddings]
+   C --> C2[⚡ Advanced Retrieval<br/>Vector + BM25 + Cohere]
+   
+   C --> D{🤔 Decision Node<br/>should_search_web?}
+   
+   D -->|Need Web Search| E[🌐 Web Search Agent<br/>Tavily API]
+   D -->|PDFs Sufficient| F[✅ Skip Web Agent<br/>Use only PDFs]
+   
+   E --> E1[🔧 Tavily Tool<br/>Real-time web search]
+   
+   E --> G[📝 Generation Agent<br/>Create implementation plan]
+   F --> G
+   
+   G --> G1[💬 LLM Generator<br/>GPT-4o-mini]
+   G --> G2[🎯 Source Filter<br/>Remove irrelevant sources]
+   
+   G --> H[📤 Response<br/>answer + sources + metadata]
+   
+   H --> I[🖥️ Frontend Display<br/>StepByStepGuide.jsx]
+   
+   I --> I1[📄 PDF Sources<br/>Blue styling, filename]
+   I --> I2[🌐 Web Sources<br/>Purple styling, clickable URL]
+   
+   %% Data flow from tools to generation
+   C1 -.-> G
+   C2 -.-> G
+   E1 -.-> G
+   
+   %% Styling
+   classDef entry fill:#e1f5fe,stroke:#01579b,stroke-width:3px
+   classDef agent fill:#f3e5f5,stroke:#4a148c,stroke-width:3px
+   classDef decision fill:#fff3e0,stroke:#e65100,stroke-width:3px
+   classDef tool fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
+   classDef output fill:#fce4ec,stroke:#880e4f,stroke-width:2px
+   classDef frontend fill:#e0f2f1,stroke:#004d40,stroke-width:2px
+   classDef rejection fill:#ffebee,stroke:#c62828,stroke-width:2px
+   
+   class A entry
+   class C,E,F,G agent
+   class B,D decision
+   class C1,C2,E1,G1,G2 tool
+   class H output
+   class I,I1,I2 frontend
+   class Z rejection
+   
+   linkStyle 9,10,11 stroke:#666,stroke-width:2px,stroke-dasharray:5 5
+```
+**Key Components:**
+1. 👤 User Query - Entry point via FastAPI
+2. 🔒 Relevance Check - LLM filters out-of-scope questions
+3. 🔍 Analysis Agent - Retrieves docs using Vector Store or Advanced Retrieval
+4. 🤔 Decision Node - Intelligent routing: web search or skip
+5. 🌐 Web Search Agent - Tavily API for real-time info
+6. ✅ Skip Web Agent - Uses only PDF documentation
+7. 📝 Generation Agent - Creates answer with source filtering
+8. 📤 Response - Structured output with sources
+9. 🖥️ Frontend Display - Different styling for PDF vs web sources
+
+Decision Logic:
+* If < 3 sources OR needs market info OR PDFs off-topic → Web Search
+* Otherwise → Skip Web (PDFs sufficient)
+
 ---
 
 ## Task 5: Creating a Golden Test Data Set

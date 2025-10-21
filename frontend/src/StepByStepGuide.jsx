@@ -149,41 +149,61 @@ function StepByStepGuide({ guide, onBack, onNewSearch, loading }) {
             <div className="mt-8 pt-8 border-t border-gray-700">
               <h3 className="text-lg font-bold text-white mb-4">📚 Sources Referenced:</h3>
               <div className="space-y-2">
-                {guide.sources.slice(0, 3).map((source, idx) => {
-                  // Extract just the filename from the path
+                {guide.sources.map((source, idx) => {
+                  // Check if this is a web source (URL) or PDF
+                  const isWebSource = source.metadata?.type === 'web_search' || 
+                                     source.metadata?.source?.startsWith('http')
+                  
+                  // Extract filename from path (for PDFs)
                   const getFilename = (path) => {
                     if (!path) return 'Unknown source'
                     const parts = path.split('/')
                     return parts[parts.length - 1]
                   }
 
-                  return (
-                    <div key={idx} className="bg-gray-700/30 rounded-lg p-3 text-sm">
-                      <div className="flex items-start gap-2 mb-2">
-                        <span className="text-blue-400 font-mono text-xs">📄</span>
-                        <span className="text-blue-300 font-medium text-xs">
-                          {getFilename(source.metadata?.source)}
-                        </span>
+                  if (isWebSource) {
+                    // Display web source with clickable link
+                    return (
+                      <div key={idx} className="bg-purple-900/20 border border-purple-500/30 rounded-lg p-3 text-sm">
+                        <div className="flex items-start gap-2 mb-2">
+                          <span className="text-purple-400 font-mono text-xs">🌐</span>
+                          <a 
+                            href={source.metadata?.source}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-purple-300 hover:text-purple-200 font-medium text-xs underline"
+                          >
+                            {source.metadata?.title || 'Web Resource'}
+                          </a>
+                        </div>
+                        <div className="text-gray-400 text-xs line-clamp-2 ml-5">
+                          {source.content?.substring(0, 150)}...
+                        </div>
                       </div>
-                      <div className="text-gray-400 text-xs line-clamp-2 ml-5">
-                        {source.content?.substring(0, 150)}...
+                    )
+                  } else {
+                    // Display PDF source
+                    return (
+                      <div key={idx} className="bg-gray-700/30 rounded-lg p-3 text-sm">
+                        <div className="flex items-start gap-2 mb-2">
+                          <span className="text-blue-400 font-mono text-xs">📄</span>
+                          <span className="text-blue-300 font-medium text-xs">
+                            {getFilename(source.metadata?.source)}
+                            {source.metadata?.page && (
+                              <span className="text-gray-500 ml-1">
+                                Page {source.metadata.page}
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                        <div className="text-gray-400 text-xs line-clamp-2 ml-5">
+                          {source.content?.substring(0, 150)}...
+                        </div>
                       </div>
-                    </div>
-                  )
+                    )
+                  }
                 })}
               </div>
-              
-              {guide.used_web_search && (
-                <div className="mt-4 p-3 bg-purple-900/20 border border-purple-500/30 rounded-lg">
-                  <div className="flex items-center gap-2 text-sm">
-                    <span className="text-purple-400">🌐</span>
-                    <span className="text-purple-300 font-medium">Additional research from web</span>
-                  </div>
-                  <p className="text-xs text-gray-400 mt-1 ml-6">
-                    Tool recommendations and real-world examples enhanced with online research
-                  </p>
-                </div>
-              )}
             </div>
           )}
         </div>

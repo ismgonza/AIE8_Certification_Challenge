@@ -191,23 +191,40 @@ class RAGPipeline:
         docs = self.retrieve(question)
         
         # Search Tavily for additional context
-        tavily_results = None
+        tavily_text = None
+        web_sources = []
         if self.use_tavily:
-            tavily_results = search_tavily(question)
+            tavily_text, tavily_results = search_tavily(question)
+            # Convert Tavily results to Document format
+            if tavily_results:
+                from langchain.schema import Document
+                for result in tavily_results:
+                    web_doc = Document(
+                        page_content=result['content'],
+                        metadata={
+                            'source': result['url'],
+                            'title': result['title'],
+                            'type': 'web_search'
+                        }
+                    )
+                    web_sources.append(web_doc)
         
         # Generate answer
-        answer = self.generate(question, docs, tavily_results)
+        answer = self.generate(question, docs, tavily_text)
         
         result = {"answer": answer}
         
         if return_sources:
+            # Combine PDF sources and web sources
+            all_sources = docs + web_sources
             result["sources"] = [
                 {
                     "content": doc.page_content,
                     "metadata": doc.metadata
                 }
-                for doc in docs
+                for doc in all_sources
             ]
+            result["used_web_search"] = bool(web_sources)
         
         logger.info("✅ Query completed")
         return result

@@ -125,23 +125,13 @@ def should_search_web(state: AgentState) -> str:
     iso_requirements = state["iso_requirements"]
     sources = state.get("sources", [])
     
-    # Quick heuristic: if we found less than 3 good sources, might need web
+    # Quick heuristic: if we found less than 3 sources, definitely need web
     if len(sources) < 3:
         logger.info("⚠️ Limited sources found - will search web")
         return "search_web"
     
-    # Smart check: If sources are from CIS Benchmarks, they're ALWAYS actionable
-    # CIS Benchmarks contain specific commands and configurations
-    source_names = [doc.metadata.get("source", "").lower() for doc in sources]
-    cis_benchmark_count = sum(1 for name in source_names if "cis" in name and "benchmark" in name)
-    
-    if cis_benchmark_count >= 2:
-        logger.info(f"✅ Found {cis_benchmark_count} CIS Benchmark sources - skipping web search")
-        logger.info("💡 CIS Benchmarks contain specific commands and configurations")
-        return "skip_web"
-    
     # Check if question is asking for product recommendations or comparisons
-    # These need web search for current pricing and options
+    # These ALWAYS need web search for current pricing and options
     question_lower = question.lower()
     needs_market_info = any(keyword in question_lower for keyword in [
         "best", "recommend", "which tool", "which product", "compare",
@@ -152,10 +142,10 @@ def should_search_web(state: AgentState) -> str:
         logger.info("🔍 Question asks for tool recommendations - will search web for current options")
         return "search_web"
     
-    # For other cases, do a quick LLM check
-    # But look at actual source content, not just the analysis
+    # CRITICAL: Check if sources are actually RELEVANT to the question
+    # Even if we have CIS Benchmarks, they might not answer THIS specific question
     sample_content = "\n\n".join([
-        f"Source {i+1}: {doc.page_content[:300]}"
+        f"Source {i+1}: {doc.page_content[:400]}"
         for i, doc in enumerate(sources[:3])
     ])
     
@@ -165,22 +155,39 @@ def should_search_web(state: AgentState) -> str:
         openai_api_key=settings.OPENAI_API_KEY
     )
     
-    completeness_check = f"""Does this documentation contain SPECIFIC commands, scripts, or configuration steps to answer the question?
+    # First check: Is the documentation relevant to the topic?
+    relevance_check = f"""Evaluate if this documentation covers the security topic in the question.
 
 Question: {question}
 
-Sample from documentation:
+Retrieved Documentation:
 {sample_content}
 
-Answer ONLY: YES or NO
+Evaluate ONLY relevance:
+- Is this documentation about the same topic/technology mentioned in the question?
+- Does it provide security guidance, requirements, or best practices for this topic?
 
-YES = Has bash/PowerShell commands, specific config files, step-by-step technical procedures
-NO = Mostly theory, principles, or recommendations without specific commands"""
+IMPORTANT: Security documentation (CIS, NIST, OWASP) provides requirements and guidance.
+Even if it doesn't have exact CLI commands, it's still valuable and should be marked as GOOD.
+
+Answer with ONLY one of these:
+- "GOOD" if documentation is clearly about the same topic and provides security guidance
+- "INSUFFICIENT" if documentation is about a completely different topic or technology
+
+Examples:
+- Question about "EC2 IMDSv2", PDFs discuss EC2 and IMDS → GOOD
+- Question about "Windows Active Directory", PDFs only about AWS IAM → INSUFFICIENT
+
+Your answer:"""
     
-    completeness = llm.invoke(completeness_check)
-    decision = "skip_web" if "YES" in completeness.content.upper() else "search_web"
+    relevance = llm.invoke(relevance_check)
+    decision = "skip_web" if "GOOD" in relevance.content.upper() else "search_web"
     
-    logger.info(f"🎯 Decision: {decision.upper().replace('_', ' ')}")
+    if decision == "search_web":
+        logger.info("🎯 Decision: SEARCH WEB (documentation insufficient or off-topic)")
+    else:
+        logger.info("✅ Decision: SKIP WEB (documentation is relevant and complete)")
+    
     return decision
 
 
@@ -192,11 +199,30 @@ def web_search_agent(state: AgentState) -> AgentState:
     logger.info("📡 Web Search Agent: Searching for implementation examples")
     
     question = state["question"]
-    tavily_results = search_tavily(question, max_results=5)
+    tavily_text, tavily_results = search_tavily(question, max_results=5)
+    
+    # Convert Tavily results to Document format and add to sources
+    web_sources = []
+    if tavily_results:
+        from langchain.schema import Document
+        for result in tavily_results:
+            web_doc = Document(
+                page_content=result['content'],
+                metadata={
+                    'source': result['url'],
+                    'title': result['title'],
+                    'type': 'web_search'
+                }
+            )
+            web_sources.append(web_doc)
+    
+    # Combine existing PDF sources with web sources
+    all_sources = state.get("sources", []) + web_sources
     
     return {
         **state,
-        "research_results": f"**Web Research Results:**\n{tavily_results or 'No results found'}",
+        "research_results": f"**Web Research Results:**\n{tavily_text or 'No results found'}",
+        "sources": all_sources,  # Update sources to include web URLs
         "used_web_search": True
     }
 
@@ -229,6 +255,8 @@ def generation_agent(state: AgentState) -> AgentState:
     question = state["question"]
     iso_requirements = state["iso_requirements"]  # Actually contains all security docs
     research_results = state["research_results"]
+    used_web_search = state.get("used_web_search", False)
+    sources = state.get("sources", [])
     
     # Combine all context
     full_context = f"""**Security Standards Documentation (CIS, NIST, OWASP, CSA):**
@@ -253,9 +281,36 @@ def generation_agent(state: AgentState) -> AgentState:
     
     response = llm.invoke(messages)
     
+    # Filter sources: If web search was used, prioritize web sources
+    # and remove PDF sources that are clearly off-topic
+    filtered_sources = sources
+    if used_web_search:
+        web_sources = [s for s in sources if s.metadata.get('type') == 'web_search']
+        pdf_sources = [s for s in sources if s.metadata.get('type') != 'web_search']
+        
+        # If we have web sources, they're likely more relevant
+        # Only keep PDF sources if they seem related to the question
+        if web_sources:
+            # Quick relevance check for PDF sources
+            relevant_pdfs = []
+            for pdf_source in pdf_sources[:3]:  # Check top 3 PDFs only
+                # Simple keyword matching to filter out completely irrelevant PDFs
+                question_keywords = set(question.lower().split())
+                content_keywords = set(pdf_source.page_content.lower().split())
+                
+                # If there's some overlap in keywords, keep it
+                overlap = question_keywords & content_keywords
+                if len(overlap) > 3:  # At least 3 common words
+                    relevant_pdfs.append(pdf_source)
+            
+            # Combine: web sources first, then relevant PDFs
+            filtered_sources = web_sources + relevant_pdfs
+            logger.info(f"📊 Filtered sources: {len(web_sources)} web + {len(relevant_pdfs)} relevant PDFs")
+    
     return {
         **state,
-        "implementation_plan": response.content
+        "implementation_plan": response.content,
+        "sources": filtered_sources  # Return filtered sources
     }
 
 
@@ -329,18 +384,23 @@ def check_question_relevance(question: str) -> tuple[bool, str]:
     )
     
     relevance_check_prompt = f"""You are a security assistant filter. Determine if this question is related to:
-- Cybersecurity (firewalls, encryption, authentication, etc.)
+- Cybersecurity (firewalls, encryption, authentication, MFA, etc.)
 - IT infrastructure (servers, networking, cloud, databases)
 - Technology configuration (Windows, Linux, macOS, routers, etc.)
 - Security frameworks (CIS Controls, NIST, OWASP, CSA, ISO, etc.)
+- Cloud account configuration (AWS, Azure, GCP settings, contact info, policies)
 - DevOps/DevSecOps
 - Compliance and security best practices
+- Account security and management (contact information, billing alerts for security)
 
 Question: "{question}"
 
+IMPORTANT: Questions about cloud account settings, contact information, and configurations ARE security-relevant 
+because they're part of security benchmarks (e.g., CIS) and incident response.
+
 Answer with ONLY one of these responses:
-- "RELEVANT" if the question is about security, IT, or technology
-- "NOT_RELEVANT: [brief reason]" if it's about something else (pets, cooking, sports, etc.)
+- "RELEVANT" if the question is about security, IT, technology, or cloud account configuration
+- "NOT_RELEVANT: [brief reason]" if it's completely unrelated (cooking, sports, entertainment, etc.)
 
 Your response:"""
     

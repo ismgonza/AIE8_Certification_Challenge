@@ -13,7 +13,7 @@ logging.basicConfig(level=settings.LOG_LEVEL)
 logger = logging.getLogger(__name__)
 
 
-def search_tavily(query: str, max_results: int = 3) -> Optional[str]:
+def search_tavily(query: str, max_results: int = 3) -> Optional[tuple[str, list]]:
     """
     Search Tavily for real-world implementation examples.
     
@@ -22,11 +22,12 @@ def search_tavily(query: str, max_results: int = 3) -> Optional[str]:
         max_results: Number of results to return
         
     Returns:
-        Formatted search results or None
+        Tuple of (formatted_text, list_of_result_dicts) or (None, [])
+        Each result dict has: {title, url, content}
     """
     if not settings.TAVILY_API_KEY:
         logger.warning("Tavily API key not configured")
-        return None
+        return None, []
     
     try:
         logger.info(f"Searching Tavily for: '{query}'")
@@ -39,19 +40,28 @@ def search_tavily(query: str, max_results: int = 3) -> Optional[str]:
         results = client.search(query=search_query, max_results=max_results)
         
         if not results.get('results'):
-            return None
+            return None, []
         
-        # Format results
+        # Extract structured results
+        structured_results = []
+        for result in results['results'][:max_results]:
+            structured_results.append({
+                'title': result.get('title', 'Resource'),
+                'url': result.get('url', ''),
+                'content': result.get('content', '')
+            })
+        
+        # Format results for text
         tavily_context = "\n\n**Additional Resources from Web:**\n\n"
-        for idx, result in enumerate(results['results'][:max_results], 1):
-            tavily_context += f"{idx}. **{result.get('title', 'Resource')}**\n"
-            tavily_context += f"   {result.get('content', '')[:200]}...\n"
-            tavily_context += f"   Source: {result.get('url', '')}\n\n"
+        for idx, result in enumerate(structured_results, 1):
+            tavily_context += f"{idx}. **{result['title']}**\n"
+            tavily_context += f"   {result['content'][:200]}...\n"
+            tavily_context += f"   Source: {result['url']}\n\n"
         
-        logger.info(f"✅ Found {len(results['results'])} Tavily results")
-        return tavily_context
+        logger.info(f"✅ Found {len(structured_results)} Tavily results")
+        return tavily_context, structured_results
     
     except Exception as e:
         logger.warning(f"Tavily search failed: {e}")
-        return None
+        return None, []
 
