@@ -165,7 +165,7 @@ graph TD
    B -->|Not Relevant| Z[❌ Out of Scope<br/>Return rejection message]
    B -->|Relevant| C[🔍 Analysis Agent<br/>Retrieve & analyze docs]
    
-   C -->|(Only for reference)| C1[📊 Vector Store<br/>Qdrant + OpenAI embeddings]
+   C -->|Only for reference| C1[📊 Vector Store<br/>Qdrant + OpenAI embeddings]
    C --> C2[⚡ Advanced Retrieval<br/>Vector + BM25 + Cohere]
    
    C --> D{🤔 Decision Node<br/>should_search_web?}
