@@ -38,6 +38,8 @@ Small and medium businesses struggle to implement basic security practices due t
 
 ## Task 2: Proposed Solution
 
+**Shieldy is an AI-powered security assistant that transforms overwhelming security frameworks into personalized, actionable guidance for small-medium businesses.** Users interact through a clean, modern web interface where they can either get a complete security assessment in 5 minutes (answering simple questions about their company to receive a scored report with prioritized recommendations tailored to their industry, tech stack, and budget) or instantly search for implementation help on any security topic and receive step-by-step guides with copy-paste commands drawn from authoritative sources like CIS benchmarks and NIST standards. The experience feels like having a knowledgeable security consultant on-demand—fast, specific, and practical—without the $10K price tag or weeks of waiting, making enterprise-grade security guidance accessible to businesses that need it most but can afford it least.
+
 ### How It Works for Users
 
 **Two modes for different needs:**
