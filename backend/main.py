@@ -137,6 +137,12 @@ async def startup_event():
     try:
         logger.info("🚀 Starting Security Maturity Assistant...")
         
+        # Log LangSmith tracing status
+        if settings.LANGCHAIN_API_KEY:
+            logger.info("✅ LangSmith tracing enabled - view traces at https://smith.langchain.com")
+        else:
+            logger.info("⚠️ LangSmith tracing disabled (no API key)")
+        
         vs = get_vector_store()
         
         # Check if collection exists and has documents

@@ -17,6 +17,7 @@ load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 COHERE_API_KEY = os.getenv("COHERE_API_KEY")
+LANGCHAIN_API_KEY = os.getenv("LANGCHAIN_API_KEY")
 
 # Validate required API keys
 if not OPENAI_API_KEY:
@@ -71,6 +72,16 @@ LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")  # Options: DEBUG, INFO, WARNING, ERR
 
 
 # ============================================================================
+# LangSmith Tracing Configuration
+# ============================================================================
+# Enable LangSmith tracing if API key is present
+if LANGCHAIN_API_KEY:
+    os.environ["LANGCHAIN_TRACING_V2"] = "true"
+    os.environ["LANGCHAIN_PROJECT"] = "Security Maturity Assistant - Production"
+    os.environ["LANGCHAIN_ENDPOINT"] = "https://api.smith.langchain.com"
+
+
+# ============================================================================
 # Helper function to print configuration (useful for debugging)
 # ============================================================================
 def print_settings():
@@ -90,6 +101,7 @@ def print_settings():
     print(f"Reranker Model:     {RERANKER_MODEL}")
     print(f"Data Path:          {DATA_PATH}")
     print(f"Log Level:          {LOG_LEVEL}")
+    print(f"LangSmith Tracing:  {'Enabled ✅' if LANGCHAIN_API_KEY else 'Disabled'}")
     print("=" * 60)
 
 

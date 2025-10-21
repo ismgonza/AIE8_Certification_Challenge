@@ -53,6 +53,7 @@ A production-grade Retrieval-Augmented Generation (RAG) system for security fram
 - **OpenAI API Key**: For embeddings (`text-embedding-3-small`) and LLM (`gpt-4o-mini`)
 - **Cohere API Key**: For ensemble reranking (optional, for advanced retrieval)
 - **Tavily API Key**: For web search (optional, for research agent)
+- **LangSmith API Key**: For tracing and monitoring agent workflows (optional, highly recommended)
 - **Docker** (recommended): For persistent Qdrant vector store
 - **Security PDFs**: Place in `data/` folder (CIS, NIST, OWASP, CSA benchmarks)
 
@@ -126,7 +127,14 @@ OPENAI_API_KEY=sk-proj-your-key-here
 # Optional (but recommended for full features)
 COHERE_API_KEY=your-cohere-key-here
 TAVILY_API_KEY=tvly-your-key-here
+LANGCHAIN_API_KEY=lsv2_pt-your-key-here
 ```
+
+**Getting API Keys:**
+- OpenAI: https://platform.openai.com/api-keys
+- Cohere: https://dashboard.cohere.com/api-keys
+- Tavily: https://app.tavily.com/
+- LangSmith: https://smith.langchain.com/settings
 
 ### 3. Configuration Settings
 
@@ -179,6 +187,32 @@ backend/
     ├── OWASP_Application_Security_Verification_Standard_5.0.0_en.pdf
     └── ... (more security PDFs)
 ```
+
+### 5. LangSmith Tracing (Optional but Recommended)
+
+LangSmith provides observability for your agentic RAG system:
+
+**What it traces:**
+- ✅ All LLM calls (gpt-4o-mini requests/responses)
+- ✅ Agent workflow steps (analyze → decision → web search → generation)
+- ✅ Vector searches and retrieval results
+- ✅ Tool calls (Tavily web search, Cohere reranking)
+- ✅ Token usage and costs per query
+- ✅ Latency breakdown by component
+
+**Setup:**
+1. Sign up at https://smith.langchain.com (free tier: 5,000 traces/month)
+2. Get API key from Settings
+3. Add to `.env`: `LANGCHAIN_API_KEY=lsv2_pt-your-key-here`
+4. Start backend → tracing automatically enabled
+5. View traces at https://smith.langchain.com
+
+**When enabled**, you'll see this on startup:
+```
+✅ LangSmith tracing enabled - view traces at https://smith.langchain.com
+```
+
+**Cost:** Free tier covers most development/testing. Production: $39/month for 50K traces.
 
 ---
 
@@ -638,6 +672,28 @@ After modifying Python files:
 1. Restart kernel: Kernel → Restart
 2. Re-run setup cells
 3. Or reload module: `importlib.reload(module)`
+
+### LangSmith Not Tracing
+
+```bash
+# Check if API key is set
+echo $LANGCHAIN_API_KEY
+
+# Check logs on startup
+# Should see: "✅ LangSmith tracing enabled"
+
+# Test manually
+python -c "from utils import settings; print('Tracing:', bool(settings.LANGCHAIN_API_KEY))"
+
+# Verify env vars are loaded
+python -c "import os; print(os.getenv('LANGCHAIN_TRACING_V2'))"
+# Should print: true
+```
+
+If still not working:
+- Verify API key is valid at https://smith.langchain.com/settings
+- Check `.env` file has `LANGCHAIN_API_KEY=...`
+- Restart backend after adding key
 
 ---
 

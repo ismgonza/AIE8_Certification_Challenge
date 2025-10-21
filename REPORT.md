@@ -165,7 +165,7 @@ graph TD
    B -->|Not Relevant| Z[❌ Out of Scope<br/>Return rejection message]
    B -->|Relevant| C[🔍 Analysis Agent<br/>Retrieve & analyze docs]
    
-   C --> C1[📊 Vector Store<br/>Qdrant + OpenAI embeddings]
+   C -->|"Old" Retriever, left for reference ONLY| C1[📊 Vector Store<br/>Qdrant + OpenAI embeddings]
    C --> C2[⚡ Advanced Retrieval<br/>Vector + BM25 + Cohere]
    
    C --> D{🤔 Decision Node<br/>should_search_web?}
@@ -304,14 +304,11 @@ Decision Logic:
 
 ### Future Improvements (Second Half of Course)
 
-> **[TODO: Placeholder for Phase 2 enhancements - to be discussed]**
->
-> Potential areas:
-> - Fine-tuned embedding model for security domain
-> - Query rewriting for complex security questions
-> - Parent document retrieval for complete context
-> - Metadata filtering by industry/company size
-> - Cost-benefit analysis of fine-tuning vs prompt engineering
+1. **Conversational Memory**: Store last 3-5 Q&A pairs per session to handle follow-up questions and maintain context across related queries
+2. **Metadata Filtering**: Filter retrieval by user profile (company size, tech stack, industry) to return only relevant documentation instead of generic results
+3. **Query Clarification**: Detect vague queries (< 5 words) and either prompt user for details or use LLM to expand query for better retrieval
+
+**Note**: Additional enhancements might be added as well.
 
 ---
 
