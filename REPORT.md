@@ -98,11 +98,11 @@ Small and medium businesses struggle to implement basic security practices due t
 
 ### Chunking Strategy
 
-**Default**: RecursiveCharacterTextSplitter (1000 tokens, 200 overlap)
+**Default**: RecursiveCharacterTextSplitter (1500 tokens, 200 overlap)
 
 **Why this decision:**
 - **Security docs have mixed structure**: Some sections are hierarchical (CIS controls with sub-controls), others are narrative (OWASP guidance). Recursive splitter handles both by trying logical breaks (headers, paragraphs) before character limits.
-- **1000 tokens preserves context**: Security controls often span multiple paragraphs (description → implementation → verification). Too small = fragmented, too large = diluted relevance. 1000 tokens ≈ 1 complete control section.
+- **1500 tokens preserves context**: Security controls often span multiple paragraphs (description → implementation → verification). Too small = fragmented, too large = diluted relevance. 1500 tokens ≈ 1 complete control section.
 - **200 overlap prevents boundary issues**: If "Step 5: Configure firewall" is split, overlap ensures the full context appears in at least one chunk.
 - **Metadata preserved**: Each chunk tagged with source file, page, framework (CIS vs OWASP) for filtering during retrieval.
 
@@ -165,7 +165,7 @@ graph TD
    B -->|Not Relevant| Z[❌ Out of Scope<br/>Return rejection message]
    B -->|Relevant| C[🔍 Analysis Agent<br/>Retrieve & analyze docs]
    
-   C -->|"Old" Retriever, left for reference ONLY| C1[📊 Vector Store<br/>Qdrant + OpenAI embeddings]
+   C -->|(Only for reference)| C1[📊 Vector Store<br/>Qdrant + OpenAI embeddings]
    C --> C2[⚡ Advanced Retrieval<br/>Vector + BM25 + Cohere]
    
    C --> D{🤔 Decision Node<br/>should_search_web?}
