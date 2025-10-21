@@ -16,7 +16,7 @@ function App() {
               </svg>
             </div>
             <h1 className="text-5xl font-bold text-white mb-4">
-              🛡️ Security Maturity Assistant
+              🛡️ Shieldy - The AI Security Assistant
             </h1>
             <p className="text-xl text-gray-300">
               AI-powered security guidance for small-medium businesses
