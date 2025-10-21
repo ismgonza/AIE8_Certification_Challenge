@@ -1,4 +1,4 @@
-# 🛡️ Security Maturity Assistant - User Guide
+# 🛡️ Shieldy - The AI Security Assistant
 
 ## What This Does
 

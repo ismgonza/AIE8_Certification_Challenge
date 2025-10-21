@@ -1,6 +1,6 @@
-# Security Maturity Assistant - Frontend
+# Shieldy - The AI Security Assistant (Frontend)
 
-React + Vite + Tailwind frontend for the Security Maturity Assistant.
+React + Vite + Tailwind frontend for Shieldy.
 
 ## Setup
 

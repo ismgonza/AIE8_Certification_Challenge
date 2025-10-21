@@ -1,4 +1,4 @@
-# Security Maturity Assistant - RAG System
+# Shieldy - The AI Security Assistant (Backend)
 
 A production-grade Retrieval-Augmented Generation (RAG) system for security frameworks (CIS, NIST, OWASP, CSA), featuring multi-agent workflow and advanced retrieval techniques.
 

@@ -1,4 +1,4 @@
-# 🛡️ Security Maturity Assistant
+# 🛡️ Shieldy - The AI Security Assistant
 
 > AI-powered security guidance for small-medium businesses
 

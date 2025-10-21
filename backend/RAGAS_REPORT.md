@@ -1,6 +1,6 @@
 # RAGAS Evaluation Report
 
-**Project**: Security Maturity Assistant RAG System  
+**Project**: Shieldy - The AI Security Assistant  
 **Framework**: RAGAS  
 **Test Dataset**: 60 synthetic questions about security frameworks (CIS, NIST, OWASP, CSA)
 
