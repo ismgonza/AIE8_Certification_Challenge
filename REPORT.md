@@ -315,6 +315,7 @@ Decision Logic:
 3. **Query Clarification**: Detect vague queries (< 5 words) and either prompt user for details or use LLM to expand query for better retrieval
 4. **RAG Prompts Tuning**: Refine the RAG prompts and develop new ones to improve accuracy in response
 5. **Frontend Enhancements**: Redesign frontend, improve structure of responses
+6. **Automatic Actions (MCP)**: connect the app to other services to run the proposed solutions (implementation guides) automatically as approved by the end user.
 
 **Note**: This might not be the core of the final project, however there is a high chance that this app could be included as part of its features.
 
